@@ -1,4 +1,4 @@
-﻿namespace Material_Editor
+namespace Material_Editor
 {
     partial class Main
     {
@@ -51,24 +51,29 @@
             openFileDialog = new System.Windows.Forms.OpenFileDialog();
             saveFileDialog = new System.Windows.Forms.SaveFileDialog();
             colorDialog = new System.Windows.Forms.ColorDialog();
-            tabControl = new Material_Editor.ThemedTabControl();
-            tabPageGeneral = new System.Windows.Forms.TabPage();
+            topControlsLayout = new System.Windows.Forms.TableLayoutPanel();
+            lbGame = new System.Windows.Forms.Label();
+            panelGameToggle = new System.Windows.Forms.Panel();
+            rbGameFO76 = new System.Windows.Forms.RadioButton();
+            rbGameFO4 = new System.Windows.Forms.RadioButton();
+            lbMaterialType = new System.Windows.Forms.Label();
+            panelMaterialTypeToggle = new System.Windows.Forms.Panel();
+            rbTypeEffect = new System.Windows.Forms.RadioButton();
+            rbTypeMaterial = new System.Windows.Forms.RadioButton();
+            lbVersion = new System.Windows.Forms.Label();
+            listVersion = new System.Windows.Forms.ComboBox();
+            contentScrollPanel = new System.Windows.Forms.Panel();
+            contentHostLayout = new System.Windows.Forms.TableLayoutPanel();
             layoutGeneral = new System.Windows.Forms.TableLayoutPanel();
-            tabPageMaterial = new System.Windows.Forms.TabPage();
             layoutMaterial = new System.Windows.Forms.TableLayoutPanel();
-            tabPageEffect = new System.Windows.Forms.TabPage();
             layoutEffect = new System.Windows.Forms.TableLayoutPanel();
             textureFileDialog = new System.Windows.Forms.OpenFileDialog();
-            listGame = new System.Windows.Forms.ComboBox();
             toolTip = new System.Windows.Forms.ToolTip(components);
-            listMatType = new System.Windows.Forms.ComboBox();
-            listVersion = new System.Windows.Forms.ComboBox();
-            lbVersion = new System.Windows.Forms.Label();
             menuStrip.SuspendLayout();
-            tabControl.SuspendLayout();
-            tabPageGeneral.SuspendLayout();
-            tabPageMaterial.SuspendLayout();
-            tabPageEffect.SuspendLayout();
+            topControlsLayout.SuspendLayout();
+            panelGameToggle.SuspendLayout();
+            panelMaterialTypeToggle.SuspendLayout();
+            contentScrollPanel.SuspendLayout();
             SuspendLayout();
             // 
             // menuStrip
@@ -77,7 +82,7 @@
             menuStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { fileToolStripMenuItem, toolsToolStripMenuItem, optionsToolStripMenuItem, toolStripMenuItem1 });
             menuStrip.Location = new System.Drawing.Point(0, 0);
             menuStrip.Name = "menuStrip";
-            menuStrip.Size = new System.Drawing.Size(624, 24);
+            menuStrip.Size = new System.Drawing.Size(1280, 24);
             menuStrip.TabIndex = 0;
             menuStrip.Text = "menuStrip";
             // 
@@ -147,27 +152,6 @@
             exitToolStripMenuItem.Text = "Exit";
             exitToolStripMenuItem.Click += ExitToolStripMenuItem_Click;
             // 
-            // toolsToolStripMenuItem
-            // 
-            toolsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] { generateVariationsToolStripMenuItem, overwriteFilesByFieldToolStripMenuItem });
-            toolsToolStripMenuItem.Name = "toolsToolStripMenuItem";
-            toolsToolStripMenuItem.Size = new System.Drawing.Size(46, 20);
-            toolsToolStripMenuItem.Text = "Tools";
-            // 
-            // generateVariationsToolStripMenuItem
-            // 
-            generateVariationsToolStripMenuItem.Name = "generateVariationsToolStripMenuItem";
-            generateVariationsToolStripMenuItem.Size = new System.Drawing.Size(257, 22);
-            generateVariationsToolStripMenuItem.Text = "Generate Variations...";
-            generateVariationsToolStripMenuItem.Click += GenerateVariationsToolStripMenuItem_Click;
-            // 
-            // overwriteFilesByFieldToolStripMenuItem
-            // 
-            overwriteFilesByFieldToolStripMenuItem.Name = "overwriteFilesByFieldToolStripMenuItem";
-            overwriteFilesByFieldToolStripMenuItem.Size = new System.Drawing.Size(257, 22);
-            overwriteFilesByFieldToolStripMenuItem.Text = "Overwrite Files by Field...";
-            overwriteFilesByFieldToolStripMenuItem.Click += OverwriteFilesByFieldToolStripMenuItem_Click;
-            // 
             // optionsToolStripMenuItem
             // 
             optionsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] { fontToolStripMenuItem, themeToolStripMenuItem });
@@ -196,7 +180,7 @@
             defaultThemeToolStripMenuItem.Text = "Default";
             defaultThemeToolStripMenuItem.Click += DefaultThemeToolStripMenuItem_Click;
             // 
-            // windowsThemeToolStripMenuItem
+            // darkThemeToolStripMenuItem
             // 
             darkThemeToolStripMenuItem.Name = "darkThemeToolStripMenuItem";
             darkThemeToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
@@ -217,6 +201,27 @@
             aboutToolStripMenuItem.Text = "About";
             aboutToolStripMenuItem.Click += AboutToolStripMenuItem_Click;
             // 
+            // toolsToolStripMenuItem
+            // 
+            toolsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] { generateVariationsToolStripMenuItem, overwriteFilesByFieldToolStripMenuItem });
+            toolsToolStripMenuItem.Name = "toolsToolStripMenuItem";
+            toolsToolStripMenuItem.Size = new System.Drawing.Size(46, 20);
+            toolsToolStripMenuItem.Text = "Tools";
+            // 
+            // generateVariationsToolStripMenuItem
+            // 
+            generateVariationsToolStripMenuItem.Name = "generateVariationsToolStripMenuItem";
+            generateVariationsToolStripMenuItem.Size = new System.Drawing.Size(257, 22);
+            generateVariationsToolStripMenuItem.Text = "Generate Variations...";
+            generateVariationsToolStripMenuItem.Click += GenerateVariationsToolStripMenuItem_Click;
+            // 
+            // overwriteFilesByFieldToolStripMenuItem
+            // 
+            overwriteFilesByFieldToolStripMenuItem.Name = "overwriteFilesByFieldToolStripMenuItem";
+            overwriteFilesByFieldToolStripMenuItem.Size = new System.Drawing.Size(257, 22);
+            overwriteFilesByFieldToolStripMenuItem.Text = "Overwrite Files by Field...";
+            overwriteFilesByFieldToolStripMenuItem.Click += OverwriteFilesByFieldToolStripMenuItem_Click;
+            // 
             // openFileDialog
             // 
             openFileDialog.Filter = "Material/Effect File (.bgsm; .bgem)|*.bgsm;*.bgem";
@@ -231,97 +236,211 @@
             // 
             colorDialog.FullOpen = true;
             // 
-            // tabControl
+            // topControlsLayout
             // 
-            tabControl.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right;
-            tabControl.Controls.Add(tabPageGeneral);
-            tabControl.Controls.Add(tabPageMaterial);
-            tabControl.Controls.Add(tabPageEffect);
-            tabControl.Location = new System.Drawing.Point(0, 53);
-            tabControl.Name = "tabControl";
-            tabControl.SelectedIndex = 0;
-            tabControl.ShowToolTips = true;
-            tabControl.Size = new System.Drawing.Size(624, 531);
-            tabControl.TabIndex = 2;
+            topControlsLayout.ColumnCount = 8;
+            topControlsLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle());
+            topControlsLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle());
+            topControlsLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 24F));
+            topControlsLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle());
+            topControlsLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle());
+            topControlsLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            topControlsLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle());
+            topControlsLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle());
+            topControlsLayout.Controls.Add(lbGame, 0, 0);
+            topControlsLayout.Controls.Add(panelGameToggle, 1, 0);
+            topControlsLayout.Controls.Add(lbMaterialType, 3, 0);
+            topControlsLayout.Controls.Add(panelMaterialTypeToggle, 4, 0);
+            topControlsLayout.Controls.Add(lbVersion, 6, 0);
+            topControlsLayout.Controls.Add(listVersion, 7, 0);
+            topControlsLayout.Dock = System.Windows.Forms.DockStyle.Top;
+            topControlsLayout.Location = new System.Drawing.Point(0, 24);
+            topControlsLayout.Name = "topControlsLayout";
+            topControlsLayout.Padding = new System.Windows.Forms.Padding(8, 6, 8, 6);
+            topControlsLayout.RowCount = 1;
+            topControlsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            topControlsLayout.Size = new System.Drawing.Size(1280, 41);
+            topControlsLayout.TabIndex = 1;
             // 
-            // tabPageGeneral
+            // lbGame
             // 
-            tabPageGeneral.AutoScroll = true;
-            tabPageGeneral.Controls.Add(layoutGeneral);
-            tabPageGeneral.Location = new System.Drawing.Point(4, 24);
-            tabPageGeneral.Name = "tabPageGeneral";
-            tabPageGeneral.Size = new System.Drawing.Size(616, 503);
-            tabPageGeneral.TabIndex = 2;
-            tabPageGeneral.Text = "General";
-            tabPageGeneral.ToolTipText = "Affects both BGSM and BGEM files.";
-            tabPageGeneral.UseVisualStyleBackColor = false;
-            tabPageGeneral.Scroll += TabScroll;
+            lbGame.Anchor = System.Windows.Forms.AnchorStyles.Left;
+            lbGame.AutoSize = true;
+            lbGame.Location = new System.Drawing.Point(11, 13);
+            lbGame.Name = "lbGame";
+            lbGame.Size = new System.Drawing.Size(41, 15);
+            lbGame.TabIndex = 0;
+            lbGame.Text = "Game:";
+            // 
+            // panelGameToggle
+            // 
+            panelGameToggle.Anchor = System.Windows.Forms.AnchorStyles.Left;
+            panelGameToggle.Controls.Add(rbGameFO76);
+            panelGameToggle.Controls.Add(rbGameFO4);
+            panelGameToggle.Location = new System.Drawing.Point(58, 8);
+            panelGameToggle.Name = "panelGameToggle";
+            panelGameToggle.Size = new System.Drawing.Size(140, 26);
+            panelGameToggle.TabIndex = 1;
+            // 
+            // rbGameFO76
+            // 
+            rbGameFO76.Appearance = System.Windows.Forms.Appearance.Button;
+            rbGameFO76.AutoSize = true;
+            rbGameFO76.Location = new System.Drawing.Point(46, 0);
+            rbGameFO76.Name = "rbGameFO76";
+            rbGameFO76.Size = new System.Drawing.Size(43, 25);
+            rbGameFO76.TabIndex = 1;
+            rbGameFO76.TabStop = true;
+            rbGameFO76.Text = "F76";
+            rbGameFO76.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            rbGameFO76.UseVisualStyleBackColor = true;
+            rbGameFO76.CheckedChanged += GameToggle_CheckedChanged;
+            // 
+            // rbGameFO4
+            // 
+            rbGameFO4.Appearance = System.Windows.Forms.Appearance.Button;
+            rbGameFO4.AutoSize = true;
+            rbGameFO4.Location = new System.Drawing.Point(0, 0);
+            rbGameFO4.Name = "rbGameFO4";
+            rbGameFO4.Size = new System.Drawing.Size(40, 25);
+            rbGameFO4.TabIndex = 0;
+            rbGameFO4.TabStop = true;
+            rbGameFO4.Text = "FO4";
+            rbGameFO4.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            rbGameFO4.UseVisualStyleBackColor = true;
+            rbGameFO4.CheckedChanged += GameToggle_CheckedChanged;
+            // 
+            // lbMaterialType
+            // 
+            lbMaterialType.Anchor = System.Windows.Forms.AnchorStyles.Left;
+            lbMaterialType.AutoSize = true;
+            lbMaterialType.Location = new System.Drawing.Point(231, 13);
+            lbMaterialType.Name = "lbMaterialType";
+            lbMaterialType.Size = new System.Drawing.Size(34, 15);
+            lbMaterialType.TabIndex = 2;
+            lbMaterialType.Text = "Type:";
+            // 
+            // panelMaterialTypeToggle
+            // 
+            panelMaterialTypeToggle.Anchor = System.Windows.Forms.AnchorStyles.Left;
+            panelMaterialTypeToggle.Controls.Add(rbTypeEffect);
+            panelMaterialTypeToggle.Controls.Add(rbTypeMaterial);
+            panelMaterialTypeToggle.Location = new System.Drawing.Point(271, 8);
+            panelMaterialTypeToggle.Name = "panelMaterialTypeToggle";
+            panelMaterialTypeToggle.Size = new System.Drawing.Size(160, 26);
+            panelMaterialTypeToggle.TabIndex = 3;
+            // 
+            // rbTypeEffect
+            // 
+            rbTypeEffect.Appearance = System.Windows.Forms.Appearance.Button;
+            rbTypeEffect.AutoSize = true;
+            rbTypeEffect.Location = new System.Drawing.Point(71, 0);
+            rbTypeEffect.Name = "rbTypeEffect";
+            rbTypeEffect.Size = new System.Drawing.Size(51, 25);
+            rbTypeEffect.TabIndex = 1;
+            rbTypeEffect.TabStop = true;
+            rbTypeEffect.Text = "Effect";
+            rbTypeEffect.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            rbTypeEffect.UseVisualStyleBackColor = true;
+            rbTypeEffect.CheckedChanged += MaterialTypeToggle_CheckedChanged;
+            // 
+            // rbTypeMaterial
+            // 
+            rbTypeMaterial.Appearance = System.Windows.Forms.Appearance.Button;
+            rbTypeMaterial.AutoSize = true;
+            rbTypeMaterial.Location = new System.Drawing.Point(0, 0);
+            rbTypeMaterial.Name = "rbTypeMaterial";
+            rbTypeMaterial.Size = new System.Drawing.Size(65, 25);
+            rbTypeMaterial.TabIndex = 0;
+            rbTypeMaterial.TabStop = true;
+            rbTypeMaterial.Text = "Material";
+            rbTypeMaterial.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            rbTypeMaterial.UseVisualStyleBackColor = true;
+            rbTypeMaterial.CheckedChanged += MaterialTypeToggle_CheckedChanged;
+            // 
+            // lbVersion
+            // 
+            lbVersion.Anchor = System.Windows.Forms.AnchorStyles.Left;
+            lbVersion.AutoSize = true;
+            lbVersion.Location = new System.Drawing.Point(1115, 13);
+            lbVersion.Name = "lbVersion";
+            lbVersion.Size = new System.Drawing.Size(69, 15);
+            lbVersion.TabIndex = 4;
+            lbVersion.Text = "File Version:";
+            // 
+            // listVersion
+            // 
+            listVersion.Anchor = System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right;
+            listVersion.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            listVersion.FormattingEnabled = true;
+            listVersion.Location = new System.Drawing.Point(1190, 9);
+            listVersion.Margin = new System.Windows.Forms.Padding(3, 0, 0, 0);
+            listVersion.Name = "listVersion";
+            listVersion.Size = new System.Drawing.Size(82, 23);
+            listVersion.TabIndex = 5;
+            listVersion.SelectedIndexChanged += ListVersion_SelectedIndexChanged;
+            // 
+            // contentScrollPanel
+            // 
+            contentScrollPanel.AutoScroll = true;
+            contentScrollPanel.Controls.Add(contentHostLayout);
+            contentScrollPanel.Dock = System.Windows.Forms.DockStyle.Fill;
+            contentScrollPanel.Location = new System.Drawing.Point(0, 65);
+            contentScrollPanel.Name = "contentScrollPanel";
+            contentScrollPanel.Size = new System.Drawing.Size(1280, 795);
+            contentScrollPanel.TabIndex = 2;
+            // 
+            // contentHostLayout
+            // 
+            contentHostLayout.AutoSize = true;
+            contentHostLayout.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            contentHostLayout.ColumnCount = 1;
+            contentHostLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            contentHostLayout.Dock = System.Windows.Forms.DockStyle.Top;
+            contentHostLayout.Location = new System.Drawing.Point(0, 0);
+            contentHostLayout.Name = "contentHostLayout";
+            contentHostLayout.Padding = new System.Windows.Forms.Padding(8);
+            contentHostLayout.RowCount = 0;
+            contentHostLayout.Size = new System.Drawing.Size(1280, 16);
+            contentHostLayout.TabIndex = 0;
             // 
             // layoutGeneral
             // 
-            layoutGeneral.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right;
             layoutGeneral.AutoSize = true;
             layoutGeneral.ColumnCount = 3;
             layoutGeneral.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle());
             layoutGeneral.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
             layoutGeneral.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle());
-            layoutGeneral.Location = new System.Drawing.Point(3, 3);
+            layoutGeneral.Dock = System.Windows.Forms.DockStyle.Top;
+            layoutGeneral.Location = new System.Drawing.Point(0, 0);
             layoutGeneral.Name = "layoutGeneral";
-            layoutGeneral.Size = new System.Drawing.Size(610, 495);
+            layoutGeneral.Size = new System.Drawing.Size(1272, 777);
             layoutGeneral.TabIndex = 1;
-            // 
-            // tabPageMaterial
-            // 
-            tabPageMaterial.AutoScroll = true;
-            tabPageMaterial.Controls.Add(layoutMaterial);
-            tabPageMaterial.Location = new System.Drawing.Point(4, 24);
-            tabPageMaterial.Name = "tabPageMaterial";
-            tabPageMaterial.Padding = new System.Windows.Forms.Padding(3);
-            tabPageMaterial.Size = new System.Drawing.Size(616, 503);
-            tabPageMaterial.TabIndex = 0;
-            tabPageMaterial.Text = "Material";
-            tabPageMaterial.ToolTipText = "Affects only BGSM files.";
-            tabPageMaterial.UseVisualStyleBackColor = false;
-            tabPageMaterial.Scroll += TabScroll;
             // 
             // layoutMaterial
             // 
-            layoutMaterial.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right;
             layoutMaterial.AutoSize = true;
             layoutMaterial.ColumnCount = 3;
             layoutMaterial.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle());
             layoutMaterial.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
             layoutMaterial.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle());
-            layoutMaterial.Location = new System.Drawing.Point(3, 3);
+            layoutMaterial.Dock = System.Windows.Forms.DockStyle.Top;
+            layoutMaterial.Location = new System.Drawing.Point(0, 0);
             layoutMaterial.Name = "layoutMaterial";
-            layoutMaterial.Size = new System.Drawing.Size(610, 495);
+            layoutMaterial.Size = new System.Drawing.Size(1272, 777);
             layoutMaterial.TabIndex = 1;
-            // 
-            // tabPageEffect
-            // 
-            tabPageEffect.AutoScroll = true;
-            tabPageEffect.Controls.Add(layoutEffect);
-            tabPageEffect.Location = new System.Drawing.Point(4, 24);
-            tabPageEffect.Name = "tabPageEffect";
-            tabPageEffect.Padding = new System.Windows.Forms.Padding(3);
-            tabPageEffect.Size = new System.Drawing.Size(616, 503);
-            tabPageEffect.TabIndex = 1;
-            tabPageEffect.Text = "Effect";
-            tabPageEffect.ToolTipText = "Affects only BGEM files.";
-            tabPageEffect.UseVisualStyleBackColor = false;
-            tabPageEffect.Scroll += TabScroll;
             // 
             // layoutEffect
             // 
-            layoutEffect.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right;
             layoutEffect.AutoSize = true;
             layoutEffect.ColumnCount = 3;
             layoutEffect.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle());
             layoutEffect.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
             layoutEffect.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle());
-            layoutEffect.Location = new System.Drawing.Point(3, 3);
+            layoutEffect.Dock = System.Windows.Forms.DockStyle.Top;
+            layoutEffect.Location = new System.Drawing.Point(0, 0);
             layoutEffect.Name = "layoutEffect";
-            layoutEffect.Size = new System.Drawing.Size(610, 495);
+            layoutEffect.Size = new System.Drawing.Size(1272, 777);
             layoutEffect.TabIndex = 1;
             // 
             // textureFileDialog
@@ -329,16 +448,6 @@
             textureFileDialog.DefaultExt = "dds";
             textureFileDialog.Filter = "Texture File (.dds)|*.dds";
             textureFileDialog.Title = "Choose a texture file...";
-            // 
-            // listGame
-            // 
-            listGame.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            listGame.FormattingEnabled = true;
-            listGame.Location = new System.Drawing.Point(7, 26);
-            listGame.Name = "listGame";
-            listGame.Size = new System.Drawing.Size(89, 23);
-            listGame.TabIndex = 3;
-            listGame.SelectedIndexChanged += ListGame_SelectedIndexChanged;
             // 
             // toolTip
             // 
@@ -349,54 +458,19 @@
             toolTip.ToolTipTitle = "Info";
             toolTip.Popup += ToolTip_Popup;
             // 
-            // listMatType
-            // 
-            listMatType.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            listMatType.FormattingEnabled = true;
-            listMatType.Items.AddRange(new object[] { "Material (*.bgsm)", "Effect (*.bgem)" });
-            listMatType.Location = new System.Drawing.Point(102, 26);
-            listMatType.Name = "listMatType";
-            listMatType.Size = new System.Drawing.Size(148, 23);
-            listMatType.TabIndex = 4;
-            listMatType.SelectedIndexChanged += ListMatType_SelectedIndexChanged;
-            // 
-            // listVersion
-            // 
-            listVersion.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
-            listVersion.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            listVersion.FormattingEnabled = true;
-            listVersion.Location = new System.Drawing.Point(547, 26);
-            listVersion.Name = "listVersion";
-            listVersion.Size = new System.Drawing.Size(65, 23);
-            listVersion.TabIndex = 5;
-            listVersion.SelectedIndexChanged += ListVersion_SelectedIndexChanged;
-            // 
-            // lbVersion
-            // 
-            lbVersion.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
-            lbVersion.AutoSize = true;
-            lbVersion.Location = new System.Drawing.Point(472, 29);
-            lbVersion.Name = "lbVersion";
-            lbVersion.Size = new System.Drawing.Size(69, 15);
-            lbVersion.TabIndex = 6;
-            lbVersion.Text = "File Version:";
-            // 
             // Main
             // 
             AllowDrop = true;
             AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
             AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
-            AutoScroll = true;
-            ClientSize = new System.Drawing.Size(624, 586);
-            Controls.Add(lbVersion);
-            Controls.Add(listVersion);
-            Controls.Add(listMatType);
-            Controls.Add(listGame);
-            Controls.Add(tabControl);
+            AutoScroll = false;
+            ClientSize = new System.Drawing.Size(1280, 860);
+            Controls.Add(contentScrollPanel);
+            Controls.Add(topControlsLayout);
             Controls.Add(menuStrip);
             DoubleBuffered = true;
             MainMenuStrip = menuStrip;
-            MinimumSize = new System.Drawing.Size(640, 260);
+            MinimumSize = new System.Drawing.Size(1024, 640);
             Name = "Main";
             Text = "B.G.E.M.";
             FormClosing += Main_Closing;
@@ -407,13 +481,14 @@
             DragEnter += Main_DragEnter;
             menuStrip.ResumeLayout(false);
             menuStrip.PerformLayout();
-            tabControl.ResumeLayout(false);
-            tabPageGeneral.ResumeLayout(false);
-            tabPageGeneral.PerformLayout();
-            tabPageMaterial.ResumeLayout(false);
-            tabPageMaterial.PerformLayout();
-            tabPageEffect.ResumeLayout(false);
-            tabPageEffect.PerformLayout();
+            topControlsLayout.ResumeLayout(false);
+            topControlsLayout.PerformLayout();
+            panelGameToggle.ResumeLayout(false);
+            panelGameToggle.PerformLayout();
+            panelMaterialTypeToggle.ResumeLayout(false);
+            panelMaterialTypeToggle.PerformLayout();
+            contentScrollPanel.ResumeLayout(false);
+            contentScrollPanel.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -431,21 +506,15 @@
         private System.Windows.Forms.ToolStripMenuItem saveToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem newToolStripMenuItem;
         private System.Windows.Forms.ColorDialog colorDialog;
-        private ThemedTabControl tabControl;
-        private System.Windows.Forms.TabPage tabPageMaterial;
-        private System.Windows.Forms.TabPage tabPageGeneral;
         private System.Windows.Forms.ToolStripMenuItem toolStripMenuItem1;
         private System.Windows.Forms.ToolStripMenuItem aboutToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem generateVariationsToolStripMenuItem;
         private System.Windows.Forms.OpenFileDialog textureFileDialog;
         private System.Windows.Forms.ToolStripMenuItem serializeToJSONToolStripMenuItem;
         private System.Windows.Forms.TableLayoutPanel layoutGeneral;
-        private System.Windows.Forms.TabPage tabPageEffect;
         private System.Windows.Forms.TableLayoutPanel layoutEffect;
         private System.Windows.Forms.TableLayoutPanel layoutMaterial;
-        private System.Windows.Forms.ComboBox listGame;
         private System.Windows.Forms.ToolTip toolTip;
-        private System.Windows.Forms.ComboBox listMatType;
         private System.Windows.Forms.ToolStripMenuItem optionsToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem toolsToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem overwriteFilesByFieldToolStripMenuItem;
@@ -455,6 +524,16 @@
         private System.Windows.Forms.ToolStripMenuItem darkThemeToolStripMenuItem;
         private System.Windows.Forms.ComboBox listVersion;
         private System.Windows.Forms.Label lbVersion;
+        private System.Windows.Forms.TableLayoutPanel topControlsLayout;
+        private System.Windows.Forms.Label lbGame;
+        private System.Windows.Forms.Panel panelGameToggle;
+        private System.Windows.Forms.RadioButton rbGameFO76;
+        private System.Windows.Forms.RadioButton rbGameFO4;
+        private System.Windows.Forms.Label lbMaterialType;
+        private System.Windows.Forms.Panel panelMaterialTypeToggle;
+        private System.Windows.Forms.RadioButton rbTypeEffect;
+        private System.Windows.Forms.RadioButton rbTypeMaterial;
+        private System.Windows.Forms.Panel contentScrollPanel;
+        private System.Windows.Forms.TableLayoutPanel contentHostLayout;
     }
 }
-

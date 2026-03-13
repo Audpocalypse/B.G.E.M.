@@ -7,9 +7,15 @@ namespace Material_Editor
     public partial class AboutDialog : Form
     {
         public AboutDialog()
+            : this(ThemeManager.GetPalette(UITheme.Default), UITheme.Default)
+        {
+        }
+
+        public AboutDialog(ThemePalette palette, UITheme theme)
         {
             InitializeComponent();
             AppIconProvider.Apply(this);
+            DialogThemeHelper.Apply(this, palette, theme);
         }
 
         private void AboutText_LinkClicked(object sender, LinkClickedEventArgs e)

@@ -46,10 +46,36 @@ namespace Material_Editor
 
         private BaseMaterialFile currentMaterial;
         private BaseMaterialFile originalMaterial;
+        private readonly Dictionary<CollapsibleGroupBox, string[]> sectionVisibilityMap = [];
+        private CollapsibleGroupBox generalPageSection;
+        private CollapsibleGroupBox materialPageSection;
+        private CollapsibleGroupBox effectPageSection;
 
         private const int DefaultVersionFO4 = 2;
         private const int DefaultVersionFO76 = 21;
         private const string ApplicationTitle = "B.G.E.M.";
+        private const int DefaultEditorWidth = 1280;
+        private const int DefaultEditorHeight = 860;
+        private const int MinimumEditorWidth = 1024;
+        private const int MinimumEditorHeight = 640;
+
+        private sealed class SectionDefinition
+        {
+            public SectionDefinition(string title, int pairsPerRow, bool collapsible, bool collapsedByDefault, params string[] controls)
+            {
+                Title = title;
+                PairsPerRow = pairsPerRow;
+                Collapsible = collapsible;
+                CollapsedByDefault = collapsedByDefault;
+                Controls = controls;
+            }
+
+            public string Title { get; }
+            public int PairsPerRow { get; }
+            public bool Collapsible { get; }
+            public bool CollapsedByDefault { get; }
+            public string[] Controls { get; }
+        }
 
         private string WorkFileName
         {
@@ -70,7 +96,12 @@ namespace Material_Editor
 
         private MaterialType CurrentMaterialType
         {
-            get { return (MaterialType)listMatType.SelectedIndex; }
+            get { return rbTypeEffect.Checked ? MaterialType.Effect : MaterialType.Material; }
+        }
+
+        private Game CurrentGame
+        {
+            get { return rbGameFO76.Checked ? Game.FO76 : Game.FO4; }
         }
 
         public Main() : this(LoadConfig())
@@ -81,10 +112,11 @@ namespace Material_Editor
         {
             config = initialConfig;
             InitializeComponent();
+            MinimumSize = new Size(MinimumEditorWidth, MinimumEditorHeight);
+            Size = new Size(MinimumEditorWidth, MinimumEditorHeight);
+            ControlFactory.VisibilityChangedCallback = UpdateSectionVisibility;
             AppIconProvider.Apply(this);
-            tabControl.DrawMode = TabDrawMode.OwnerDrawFixed;
-            tabControl.PaletteProvider = () => GetPalette(config.Theme);
-            tabControl.Paint += TabControl_Paint;
+            InitializePageSections();
             ApplyConfigFont();
             ApplyTheme();
             UpdateThemeMenuChecks();
@@ -100,6 +132,32 @@ namespace Material_Editor
                 _ => ".bgsm",
             };
             return Path.ChangeExtension(filePath, ext);
+        }
+
+        private void SetGameSelection(Game game)
+        {
+            switch (game)
+            {
+                case Game.FO76:
+                    rbGameFO76.Checked = true;
+                    break;
+                default:
+                    rbGameFO4.Checked = true;
+                    break;
+            }
+        }
+
+        private void SetMaterialTypeSelection(MaterialType type)
+        {
+            switch (type)
+            {
+                case MaterialType.Effect:
+                    rbTypeEffect.Checked = true;
+                    break;
+                default:
+                    rbTypeMaterial.Checked = true;
+                    break;
+            }
         }
 
         private string BuildSuggestedVariationOutputPattern()
@@ -150,12 +208,12 @@ namespace Material_Editor
             else
                 selectedIndex = (int)Game.FO4;
 
-            if (listGame.SelectedIndex != selectedIndex)
-                listGame.SelectedIndex = selectedIndex;
+            if ((int)CurrentGame != selectedIndex)
+                SetGameSelection((Game)selectedIndex);
             else
                 FillVersionDropdown();
 
-            listMatType.SelectedIndex = (int)MaterialType.Material;
+            SetMaterialTypeSelection(MaterialType.Material);
 
             ResumeAll();
         }
@@ -464,13 +522,16 @@ namespace Material_Editor
 
         private void AboutToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            var about = new AboutDialog();
+            var about = new AboutDialog(GetPalette(config.Theme), config.Theme);
             about.ShowDialog();
         }
 
-        private void ListGame_SelectedIndexChanged(object sender, EventArgs e)
+        private void GameToggle_CheckedChanged(object sender, EventArgs e)
         {
-            var selectedGame = (Game)listGame.SelectedIndex;
+            if (sender is not RadioButton radioButton || !radioButton.Checked)
+                return;
+
+            var selectedGame = CurrentGame;
             if (config.GameVersion != selectedGame)
             {
                 config.GameVersion = selectedGame;
@@ -497,24 +558,16 @@ namespace Material_Editor
 
                 OnChanged();
             }
+
+            ApplyTheme();
         }
 
-        private void ListMatType_SelectedIndexChanged(object sender, EventArgs e)
+        private void MaterialTypeToggle_CheckedChanged(object sender, EventArgs e)
         {
-            tabControl.TabPages.Remove(tabPageMaterial);
-            tabControl.TabPages.Remove(tabPageEffect);
+            if (sender is not RadioButton radioButton || !radioButton.Checked)
+                return;
 
-            switch (CurrentMaterialType)
-            {
-                case MaterialType.Material:
-                    tabControl.TabPages.Add(tabPageMaterial);
-                    tabControl.SelectTab(tabPageMaterial);
-                    break;
-                case MaterialType.Effect:
-                    tabControl.TabPages.Add(tabPageEffect);
-                    tabControl.SelectTab(tabPageEffect);
-                    break;
-            }
+            UpdateTopLevelSectionVisibility();
 
             string filePath = ChangeFileExtension(workFilePath);
             if (filePath != workFilePath)
@@ -522,6 +575,8 @@ namespace Material_Editor
                 workFilePath = filePath;
                 OnChanged();
             }
+
+            ApplyTheme();
         }
 
         private void ListVersion_SelectedIndexChanged(object sender, EventArgs e)
@@ -542,7 +597,7 @@ namespace Material_Editor
             listVersion.Items.Clear();
 
             int defaultVersion;
-            var selectedGame = (Game)listGame.SelectedIndex;
+            var selectedGame = CurrentGame;
             switch (selectedGame)
             {
                 case Game.FO76:
@@ -678,12 +733,6 @@ namespace Material_Editor
             layoutEffect.ResumeLayout();
         }
 
-        private void TabScroll(object sender, ScrollEventArgs e)
-        {
-            var tab = (TabPage)sender;
-            tab.Update();
-        }
-
         private void OnChanged()
         {
             if (!string.IsNullOrEmpty(workFilePath))
@@ -706,13 +755,11 @@ namespace Material_Editor
         private void Main_Load(object sender, EventArgs e)
         {
             ApplyConfigFont();
-
-            var items = Enum.GetNames(typeof(Game));
-            listGame.Items.AddRange(items);
-            listGame.SelectedIndex = (int)config.GameVersion;
-
-            listMatType.SelectedIndex = 0;
+            SetGameSelection(config.GameVersion);
+            SetMaterialTypeSelection(MaterialType.Material);
             FillVersionDropdown();
+            UpdateTopLevelSectionVisibility();
+            ApplyTheme();
 
             string[] args = Environment.GetCommandLineArgs();
             if (args.Length > 1 && !string.IsNullOrEmpty(args[1]))
@@ -835,8 +882,6 @@ namespace Material_Editor
 
             BackColor = palette.FormBackground;
             ForeColor = palette.Foreground;
-            tabControl.DrawMode = config.Theme == UITheme.Default ? TabDrawMode.Normal : TabDrawMode.OwnerDrawFixed;
-            tabControl.ShouldPaintBody = () => config.Theme != UITheme.Default;
 
             if (config.Theme == UITheme.Default)
             {
@@ -846,23 +891,19 @@ namespace Material_Editor
             {
                 ApplyCustomThemeAppearance(palette);
             }
-
-            tabControl.Invalidate();
         }
 
         private void ApplyCustomThemeAppearance(ThemePalette palette)
         {
             CheckControl.OffForegroundProvider = () => Color.White;
-            ApplyThemeToControl(tabControl, palette, palette.ControlBackground);
+            ApplyThemeToControl(topControlsLayout, palette, palette.ControlBackground);
+            ApplyThemeToControl(contentScrollPanel, palette, palette.PanelBackground);
+            ApplyThemeToControl(contentHostLayout, palette, palette.PanelBackground);
             ApplyThemeToControl(layoutGeneral, palette, palette.PanelBackground);
             ApplyThemeToControl(layoutMaterial, palette, palette.PanelBackground);
             ApplyThemeToControl(layoutEffect, palette, palette.PanelBackground);
             ApplyThemeToToolStrip(menuStrip, palette);
-            ApplyComboTheme(listGame, palette);
-            ApplyComboTheme(listMatType, palette);
             ApplyComboTheme(listVersion, palette);
-            foreach (TabPage page in tabControl.TabPages)
-                page.BackColor = palette.PanelBackground;
 
             ApplyDropdownTheme(ControlNames.AlphaBlendMode, palette);
         }
@@ -870,19 +911,14 @@ namespace Material_Editor
         private void ApplyDefaultThemeAppearance()
         {
             CheckControl.OffForegroundProvider = () => Color.Red;
-            ResetControlAppearance(tabControl);
+            ResetControlAppearance(topControlsLayout);
+            ResetControlAppearance(contentScrollPanel);
+            ResetControlAppearance(contentHostLayout);
             ResetControlAppearance(layoutGeneral);
             ResetControlAppearance(layoutMaterial);
             ResetControlAppearance(layoutEffect);
-            ResetComboAppearance(listGame);
-            ResetComboAppearance(listMatType);
             ResetComboAppearance(listVersion);
             ResetToolStripAppearance(menuStrip);
-            foreach (TabPage page in tabControl.TabPages)
-            {
-                page.ResetBackColor();
-                page.ResetForeColor();
-            }
         }
 
         private void ResetControlAppearance(Control control)
@@ -911,6 +947,10 @@ namespace Material_Editor
                     checkBox.UseVisualStyleBackColor = true;
                     if (checkBox.Tag is CheckControl)
                         CheckControl.UpdateCheckVisual(checkBox);
+                    break;
+                case RadioButton radioButton:
+                    radioButton.FlatStyle = FlatStyle.Standard;
+                    radioButton.UseVisualStyleBackColor = true;
                     break;
                 case NumericUpDown numeric:
                     numeric.ResetBackColor();
@@ -961,8 +1001,7 @@ namespace Material_Editor
 
             foreach (Control child in control.Controls)
             {
-                var childBack = child is TabPage ? palette.PanelBackground : backgroundOverride;
-                ApplyThemeToControl(child, palette, childBack);
+                ApplyThemeToControl(child, palette, backgroundOverride);
             }
         }
 
@@ -1002,6 +1041,15 @@ namespace Material_Editor
                     if (ShouldOverrideForeColor(checkBox))
                         checkBox.ForeColor = palette.Foreground;
                     CheckControl.UpdateCheckVisual(checkBox);
+                    break;
+                case RadioButton radioButton:
+                    radioButton.FlatStyle = FlatStyle.Flat;
+                    radioButton.FlatAppearance.BorderSize = 1;
+                    radioButton.FlatAppearance.BorderColor = palette.Accent.IsEmpty ? Color.Gray : palette.Accent;
+                    radioButton.BackColor = radioButton.Checked
+                        ? Color.Black
+                        : background;
+                    radioButton.ForeColor = palette.Foreground;
                     break;
                 case ListView listView:
                     listView.BackColor = palette.PanelBackground;
@@ -1082,34 +1130,6 @@ namespace Material_Editor
             {
                 item.BackColor = palette.MenuBackground;
                 item.ForeColor = palette.Foreground;
-            }
-        }
-
-        private void TabControl_Paint(object sender, PaintEventArgs e)
-        {
-            if (tabControl == null)
-                return;
-
-            var palette = GetPalette(config.Theme);
-            var tabHeaderHeight = tabControl.TabCount > 0 ? tabControl.GetTabRect(0).Bottom : 0;
-            var headerArea = new Rectangle(0, 0, tabControl.ClientRectangle.Width, tabHeaderHeight);
-            var display = new Rectangle(0, tabHeaderHeight, tabControl.ClientRectangle.Width, tabControl.ClientRectangle.Height - tabHeaderHeight);
-
-            if (config.Theme == UITheme.Default)
-            {
-                using var borderPen = new Pen(ControlPaint.Light(SystemColors.ControlDark, 0.2f));
-                e.Graphics.DrawRectangle(borderPen, display);
-                return;
-            }
-
-            using (var headerBrush = new SolidBrush(ControlPaint.Dark(palette.PanelBackground, 0.05f)))
-            {
-                e.Graphics.FillRectangle(headerBrush, headerArea);
-            }
-
-            using (var bodyBrush = new SolidBrush(palette.PanelBackground))
-            {
-                e.Graphics.FillRectangle(bodyBrush, display);
             }
         }
 
@@ -1250,6 +1270,593 @@ namespace Material_Editor
             return Convert.ToBoolean(property);
         }
 
+        private void PrepareFlatEditorLayout(TableLayoutPanel layout)
+        {
+            layout.SuspendLayout();
+            layout.Controls.Clear();
+            layout.RowStyles.Clear();
+            layout.ColumnStyles.Clear();
+            layout.AutoSize = true;
+            layout.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            layout.Dock = DockStyle.Top;
+            layout.Margin = new Padding(0);
+            layout.Padding = new Padding(8);
+            layout.RowCount = 0;
+            layout.ColumnCount = 3;
+            layout.ColumnStyles.Add(new ColumnStyle());
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            layout.ColumnStyles.Add(new ColumnStyle());
+            layout.ResumeLayout();
+        }
+
+        private void PrepareHostLayout(TableLayoutPanel layout)
+        {
+            layout.SuspendLayout();
+            layout.Controls.Clear();
+            layout.RowStyles.Clear();
+            layout.ColumnStyles.Clear();
+            layout.AutoSize = true;
+            layout.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            layout.Dock = DockStyle.Top;
+            layout.Margin = new Padding(0);
+            layout.Padding = new Padding(8);
+            layout.RowCount = 0;
+            layout.ColumnCount = 1;
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            layout.ResumeLayout();
+        }
+
+        private TableLayoutPanel CreateSectionColumn()
+        {
+            var column = new TableLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 1,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0),
+                Padding = new Padding(0),
+                RowCount = 0
+            };
+            column.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            return column;
+        }
+
+        private TableLayoutPanel CreateTwoColumnHost()
+        {
+            var host = new TableLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 2,
+                Dock = DockStyle.Top,
+                Margin = new Padding(0),
+                Padding = new Padding(0),
+                RowCount = 1
+            };
+            host.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            host.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            host.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            return host;
+        }
+
+        private static void AddControlRow(TableLayoutPanel parent, Control control)
+        {
+            int row = parent.RowCount++;
+            parent.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            parent.Controls.Add(control, 0, row);
+        }
+
+        private void UpdateSectionVisibility()
+        {
+            foreach (var entry in sectionVisibilityMap)
+            {
+                bool hasVisibleContent = entry.Value.Any(name =>
+                {
+                    if (string.IsNullOrEmpty(name))
+                        return false;
+
+                    var control = ControlFactory.Find(name);
+                    return control?.ShouldBeVisible() == true;
+                });
+
+                entry.Key.Visible = hasVisibleContent;
+            }
+        }
+
+        private void InitializePageSections()
+        {
+            contentHostLayout.SuspendLayout();
+            contentHostLayout.Controls.Clear();
+            contentHostLayout.RowStyles.Clear();
+            contentHostLayout.RowCount = 0;
+
+            generalPageSection = CreateTopLevelPageSection("General", layoutGeneral);
+            materialPageSection = CreateTopLevelPageSection("Material", layoutMaterial);
+            effectPageSection = CreateTopLevelPageSection("Effect", layoutEffect);
+
+            AddControlRow(contentHostLayout, generalPageSection);
+            AddControlRow(contentHostLayout, materialPageSection);
+            AddControlRow(contentHostLayout, effectPageSection);
+
+            contentHostLayout.ResumeLayout();
+            UpdateTopLevelSectionVisibility();
+        }
+
+        private static CollapsibleGroupBox CreateTopLevelPageSection(string title, TableLayoutPanel layout)
+        {
+            var section = new CollapsibleGroupBox(title, collapsible: true, collapsedByDefault: false)
+            {
+                Margin = new Padding(0, 0, 0, 8)
+            };
+            section.ContentLayout.Controls.Add(layout, 0, 0);
+            return section;
+        }
+
+        private void UpdateTopLevelSectionVisibility()
+        {
+            if (generalPageSection != null)
+                generalPageSection.Visible = true;
+
+            if (materialPageSection != null)
+                materialPageSection.Visible = CurrentMaterialType == MaterialType.Material;
+
+            if (effectPageSection != null)
+                effectPageSection.Visible = CurrentMaterialType == MaterialType.Effect;
+        }
+
+        private void RebuildGeneralLayout()
+        {
+            var leftSections = new[]
+            {
+                new SectionDefinition("Texture Coordinates", 2, false, false,
+                    ControlNames.TileU,
+                    ControlNames.TileV,
+                    ControlNames.OffsetU,
+                    ControlNames.OffsetV,
+                    ControlNames.ScaleU,
+                    ControlNames.ScaleV),
+                new SectionDefinition("Alpha / Refraction", 2, false, false,
+                    ControlNames.Alpha,
+                    ControlNames.AlphaBlendMode,
+                    ControlNames.AlphaTestReference,
+                    ControlNames.AlphaTest,
+                    ControlNames.Refraction,
+                    ControlNames.RefractionFalloff,
+                    ControlNames.RefractionPower),
+            };
+
+            var rightSections = new[]
+            {
+                new SectionDefinition("Rendering / Environment", 2, false, false,
+                    ControlNames.ZBufferWrite,
+                    ControlNames.ZBufferTest,
+                    ControlNames.ScreenSpaceReflections,
+                    ControlNames.WetnessControlSSR,
+                    ControlNames.EnvironmentMapping,
+                    ControlNames.EnvironmentMaskScale,
+                    ControlNames.DepthBias,
+                    ControlNames.Decal,
+                    ControlNames.TwoSided,
+                    ControlNames.DecalNoFade,
+                    ControlNames.NonOccluder,
+                    ControlNames.GrayscaleToPaletteColor),
+                new SectionDefinition("Advanced Masking", 1, false, false,
+                    ControlNames.MaskWrites),
+            };
+
+            PrepareHostLayout(layoutGeneral);
+            BuildSectionColumns(layoutGeneral, leftSections, rightSections);
+        }
+
+        private void RebuildMaterialLayout()
+        {
+            PrepareHostLayout(layoutMaterial);
+
+            var pathSection = CreatePathsSection("Paths / Textures", new[]
+            {
+                ControlNames.Diffuse,
+                ControlNames.Normal,
+                ControlNames.SmoothSpec,
+                ControlNames.Greyscale,
+                ControlNames.Environment,
+                ControlNames.Glow,
+                ControlNames.Wrinkles,
+                ControlNames.InnerLayer,
+                ControlNames.Displacement,
+                ControlNames.RootMaterialPath,
+                ControlNames.Specular,
+                ControlNames.Lighting,
+                ControlNames.Flow,
+                ControlNames.DistanceFieldAlpha,
+            }, null);
+            AddControlRow(layoutMaterial, pathSection);
+
+            var leftSections = new[]
+            {
+                new SectionDefinition("Specular / Surface", 2, true, true,
+                    ControlNames.SpecularEnabled,
+                    ControlNames.SpecularColor,
+                    ControlNames.SpecularMultiplier,
+                    ControlNames.Smoothness,
+                    ControlNames.FresnelPower,
+                    ControlNames.AnisoLighting,
+                    ControlNames.GrayscaleToPaletteScale,
+                    ControlNames.SkewSpecularAlpha),
+                new SectionDefinition("Lighting / Emittance", 2, true, true,
+                    ControlNames.RimLighting,
+                    ControlNames.RimPower,
+                    ControlNames.BackLighting,
+                    ControlNames.BacklightPower,
+                    ControlNames.SubsurfaceLighting,
+                    ControlNames.SubsurfaceLightingRolloff,
+                    ControlNames.Translucency,
+                    ControlNames.TranslucencyThickObject,
+                    ControlNames.TranslucencyAlbSubsurfColor,
+                    ControlNames.TranslucencySubsurfaceColor,
+                    ControlNames.TranslucencyTransmissiveScale,
+                    ControlNames.TranslucencyTurbulence,
+                    ControlNames.EmittanceEnabled,
+                    ControlNames.ExternalEmittance,
+                    ControlNames.EmittanceColor,
+                    ControlNames.EmittanceMultiplier,
+                    ControlNames.LumEmittance,
+                    ControlNames.AdaptativeEmissive,
+                    ControlNames.AdaptEmissiveExposureOffset,
+                    ControlNames.AdaptEmissiveFinalExposureMin,
+                    ControlNames.AdaptEmissiveFinalExposureMax),
+            };
+
+            var rightSections = new[]
+            {
+                new SectionDefinition("Wetness", 2, true, true,
+                    ControlNames.WetSpecScale,
+                    ControlNames.WetSpecPowerScale,
+                    ControlNames.WetSpecMinVar,
+                    ControlNames.WetEnvMapScale,
+                    ControlNames.WetFresnelPower,
+                    ControlNames.WetMetalness),
+                new SectionDefinition("Rendering Flags", 2, true, true,
+                    ControlNames.EnableEditorAlphaRef,
+                    ControlNames.ModelSpaceNormals,
+                    ControlNames.ReceiveShadows,
+                    ControlNames.CastShadows,
+                    ControlNames.AssumeShadowmask,
+                    ControlNames.HideSecret,
+                    ControlNames.DissolveFade,
+                    ControlNames.Glowmap),
+                new SectionDefinition("Special Shader Features", 2, true, true,
+                    ControlNames.Hair,
+                    ControlNames.Facegen,
+                    ControlNames.SkinTint,
+                    ControlNames.Tree,
+                    ControlNames.EnvironmentMapWindow,
+                    ControlNames.EnvironmentMapEye,
+                    ControlNames.Tessellate,
+                    ControlNames.HairTintColor,
+                    ControlNames.PBR,
+                    ControlNames.CustomPorosity,
+                    ControlNames.PorosityValue,
+                    ControlNames.DisplacementTexBias,
+                    ControlNames.DisplacementTexScale,
+                    ControlNames.TessellationPNScale,
+                    ControlNames.TessellationBaseFactor,
+                    ControlNames.TessellationFadeDistance,
+                    ControlNames.Terrain,
+                    ControlNames.UnkInt1BGSM,
+                    ControlNames.TerrainThresholdFalloff,
+                    ControlNames.TerrainTilingDistance,
+                    ControlNames.TerrainRotationAngle),
+            };
+
+            BuildSectionColumns(layoutMaterial, leftSections, rightSections);
+        }
+
+        private void RebuildEffectLayout()
+        {
+            PrepareHostLayout(layoutEffect);
+
+            var pathSection = CreatePathsSection("Paths / Textures", new[]
+            {
+                ControlNames.BaseTexture,
+                ControlNames.NormalTexture,
+                ControlNames.GrayscaleTexture,
+                ControlNames.EnvmapTexture,
+                ControlNames.EnvmapMaskTexture,
+                ControlNames.GlowTexture,
+                ControlNames.SpecularTexture,
+                ControlNames.LightingTexture,
+                ControlNames.GlassRoughnessScratch,
+                ControlNames.GlassDirtOverlay,
+            }, null);
+            AddControlRow(layoutEffect, pathSection);
+
+            var leftSections = new[]
+            {
+                new SectionDefinition("Surface / Color", 2, true, true,
+                    ControlNames.BaseColor,
+                    ControlNames.BaseColorScale,
+                    ControlNames.EmitColor,
+                    ControlNames.LightingInfluence,
+                    ControlNames.EnvmapMinLOD),
+                new SectionDefinition("Falloff / Softness", 2, true, true,
+                    ControlNames.FalloffEnabled,
+                    ControlNames.FalloffColorEnabled,
+                    ControlNames.FalloffStartAngle,
+                    ControlNames.FalloffStopAngle,
+                    ControlNames.FalloffStartOpacity,
+                    ControlNames.FalloffStopOpacity,
+                    ControlNames.SoftEnabled,
+                    ControlNames.SoftDepth),
+            };
+
+            var rightSections = new[]
+            {
+                new SectionDefinition("Environment / Glass", 2, true, true,
+                    ControlNames.EnvMapping,
+                    ControlNames.EnvMappingMaskScale,
+                    ControlNames.GlassEnabled,
+                    ControlNames.GlassFresnelColor,
+                    ControlNames.GlassBlurScaleBase,
+                    ControlNames.GlassBlurScaleFactor,
+                    ControlNames.GlassRefractionScaleBase),
+                new SectionDefinition("Effect Features", 2, true, true,
+                    ControlNames.BloodEnabled,
+                    ControlNames.EffectLightingEnabled,
+                    ControlNames.GrayscaleToPaletteAlpha,
+                    ControlNames.EffectGlowmap,
+                    ControlNames.EffectPBRSpecular,
+                    ControlNames.AdaptativeEmissiveExposureOffset,
+                    ControlNames.AdaptativeEmissiveFinalExposureMin,
+                    ControlNames.AdaptativeEmissiveFinalExposureMax),
+            };
+
+            BuildSectionColumns(layoutEffect, leftSections, rightSections);
+        }
+
+        private void BuildSectionColumns(TableLayoutPanel host, IReadOnlyList<SectionDefinition> leftSections, IReadOnlyList<SectionDefinition> rightSections)
+        {
+            var sectionHost = CreateTwoColumnHost();
+            var leftColumn = CreateSectionColumn();
+            var rightColumn = CreateSectionColumn();
+
+            sectionHost.Controls.Add(leftColumn, 0, 0);
+            sectionHost.Controls.Add(rightColumn, 1, 0);
+
+            foreach (var section in leftSections)
+                AddControlRow(leftColumn, CreateSection(section, true));
+
+            foreach (var section in rightSections)
+                AddControlRow(rightColumn, CreateSection(section, false));
+
+            AddControlRow(host, sectionHost);
+        }
+
+        private Control CreateSection(SectionDefinition definition, bool leftColumn)
+        {
+            var group = new CollapsibleGroupBox(definition.Title, definition.Collapsible, definition.CollapsedByDefault)
+            {
+                Margin = leftColumn ? new Padding(0, 0, 5, 8) : new Padding(5, 0, 0, 8)
+            };
+
+            var grid = CreatePropertyGrid(definition.PairsPerRow);
+            PopulatePropertyGrid(grid, definition.Controls, definition.PairsPerRow);
+            group.ContentLayout.Controls.Add(grid, 0, 0);
+            sectionVisibilityMap[group] = definition.Controls;
+            return group;
+        }
+
+        private CollapsibleGroupBox CreatePathsSection(string title, IReadOnlyList<string> controlNames, string fullWidthControlName)
+        {
+            var group = new CollapsibleGroupBox(title)
+            {
+                Margin = new Padding(0, 0, 0, 8)
+            };
+
+            var grid = CreateFileGrid();
+            PopulateFileGrid(grid, controlNames, fullWidthControlName);
+            group.ContentLayout.Controls.Add(grid, 0, 0);
+            return group;
+        }
+
+        private TableLayoutPanel CreatePropertyGrid(int pairsPerRow)
+        {
+            var grid = new TableLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = Math.Max(1, pairsPerRow * 2 + Math.Max(0, pairsPerRow - 1)),
+                Dock = DockStyle.Top,
+                Margin = new Padding(0),
+                Padding = new Padding(0),
+                RowCount = 0
+            };
+
+            for (int pairIndex = 0; pairIndex < pairsPerRow; pairIndex++)
+            {
+                grid.ColumnStyles.Add(new ColumnStyle());
+                grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F / pairsPerRow));
+
+                if (pairIndex < pairsPerRow - 1)
+                    grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 12F));
+            }
+
+            return grid;
+        }
+
+        private TableLayoutPanel CreateFileGrid()
+        {
+            var grid = new TableLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 7,
+                Dock = DockStyle.Top,
+                Margin = new Padding(0),
+                Padding = new Padding(0),
+                RowCount = 0
+            };
+
+            grid.ColumnStyles.Add(new ColumnStyle());
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            grid.ColumnStyles.Add(new ColumnStyle());
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 12F));
+            grid.ColumnStyles.Add(new ColumnStyle());
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            grid.ColumnStyles.Add(new ColumnStyle());
+
+            return grid;
+        }
+
+        private void PopulatePropertyGrid(TableLayoutPanel grid, IReadOnlyList<string> controlNames, int pairsPerRow)
+        {
+            int currentRow = -1;
+            int pairIndex = 0;
+
+            foreach (var controlName in controlNames)
+            {
+                var control = ControlFactory.Find(controlName);
+                if (control == null)
+                    continue;
+
+                ApplyCompactFieldLayout(control);
+
+                if (NeedsFullWidthRow(control))
+                {
+                    if (pairIndex != 0)
+                        pairIndex = 0;
+
+                    AddFullWidthFieldRow(grid, control);
+                    currentRow = -1;
+                    continue;
+                }
+
+                if (pairIndex == 0)
+                {
+                    currentRow = grid.RowCount++;
+                    grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                }
+
+                int column = pairIndex * 3;
+                grid.Controls.Add(control.LabelControl, column, currentRow);
+                grid.Controls.Add(control.Control, column + 1, currentRow);
+
+                pairIndex++;
+                if (pairIndex >= pairsPerRow)
+                    pairIndex = 0;
+            }
+        }
+
+        private void PopulateFileGrid(TableLayoutPanel grid, IReadOnlyList<string> controlNames, string fullWidthControlName)
+        {
+            for (int i = 0; i < controlNames.Count; i += 2)
+            {
+                int row = grid.RowCount++;
+                grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+                AddFileFieldPair(grid, row, controlNames[i], 0);
+
+                if (i + 1 < controlNames.Count)
+                    AddFileFieldPair(grid, row, controlNames[i + 1], 4);
+            }
+
+            if (!string.IsNullOrEmpty(fullWidthControlName))
+                AddFullWidthFieldRow(grid, ControlFactory.Find(fullWidthControlName));
+        }
+
+        private void AddFileFieldPair(TableLayoutPanel grid, int row, string controlName, int columnOffset)
+        {
+            if (string.IsNullOrEmpty(controlName))
+                return;
+
+            var control = ControlFactory.Find(controlName);
+            if (control == null)
+                return;
+
+            ApplyCompactFieldLayout(control, true);
+
+            grid.Controls.Add(control.LabelControl, columnOffset, row);
+            grid.Controls.Add(control.Control, columnOffset + 1, row);
+
+            if (control.ExtraControl != null)
+                grid.Controls.Add(control.ExtraControl, columnOffset + 2, row);
+        }
+
+        private void AddFullWidthFieldRow(TableLayoutPanel grid, CustomControl control)
+        {
+            if (control == null)
+                return;
+
+            ApplyCompactFieldLayout(control, true);
+
+            var rowLayout = new TableLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = control.ExtraControl != null ? 3 : 2,
+                Dock = DockStyle.Top,
+                Margin = new Padding(0),
+                Padding = new Padding(0),
+                RowCount = 1
+            };
+            rowLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            rowLayout.ColumnStyles.Add(new ColumnStyle());
+            rowLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+            if (control.ExtraControl != null)
+                rowLayout.ColumnStyles.Add(new ColumnStyle());
+
+            rowLayout.Controls.Add(control.LabelControl, 0, 0);
+            rowLayout.Controls.Add(control.Control, 1, 0);
+
+            if (control.ExtraControl != null)
+                rowLayout.Controls.Add(control.ExtraControl, 2, 0);
+
+            int row = grid.RowCount++;
+            grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            grid.Controls.Add(rowLayout, 0, row);
+            grid.SetColumnSpan(rowLayout, grid.ColumnCount);
+        }
+
+        private static bool NeedsFullWidthRow(CustomControl control)
+        {
+            return control.Control is CheckedListBox || control.ExtraControl != null;
+        }
+
+        private static void ApplyCompactFieldLayout(CustomControl control, bool pathStyle = false)
+        {
+            if (control?.LabelControl == null || control.Control == null)
+                return;
+
+            control.LabelControl.Anchor = AnchorStyles.Left;
+            control.LabelControl.AutoSize = true;
+            control.LabelControl.Margin = new Padding(0, 4, 8, 4);
+
+            switch (control.Control)
+            {
+                case CheckBox checkBox:
+                    checkBox.AutoSize = true;
+                    checkBox.Anchor = AnchorStyles.Left;
+                    checkBox.Margin = new Padding(0, 2, 0, 2);
+                    break;
+                case CheckedListBox checkedListBox:
+                    checkedListBox.Dock = DockStyle.Fill;
+                    checkedListBox.Margin = new Padding(0, 1, 0, 1);
+                    checkedListBox.Height = Math.Max(checkedListBox.Height, 60);
+                    break;
+                default:
+                    control.Control.Dock = DockStyle.Fill;
+                    control.Control.Margin = new Padding(0, 1, 0, 1);
+                    break;
+            }
+
+            if (control.ExtraControl != null)
+            {
+                control.ExtraControl.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+                control.ExtraControl.Margin = pathStyle ? new Padding(6, 1, 0, 1) : new Padding(6, 1, 0, 1);
+            }
+        }
+
         private void CreateMaterialControls(BaseMaterialFile file = null)
         {
             if (file == null)
@@ -1269,10 +1876,14 @@ namespace Material_Editor
             }
 
             currentMaterial = file;
+            sectionVisibilityMap.Clear();
 
             var fileFont = new Font("Consolas", Font.Size, FontStyle.Regular, GraphicsUnit.Point);
 
             ControlFactory.ClearControls();
+            PrepareFlatEditorLayout(layoutGeneral);
+            PrepareFlatEditorLayout(layoutMaterial);
+            PrepareFlatEditorLayout(layoutEffect);
             ControlFactory.DefaultChangedCallback = (control) => OnChanged();
 
             ControlFactory.CreateControl(layoutGeneral, ControlNames.TileU, file.TileU);
@@ -1643,6 +2254,9 @@ namespace Material_Editor
             ControlFactory.CreateControl(layoutEffect, ControlNames.EffectGlowmap, bgem.Glowmap, (control) => { return file.Version >= 16; });
             ControlFactory.CreateControl(layoutEffect, ControlNames.EffectPBRSpecular, bgem.EffectPbrSpecular, (control) => { return file.Version >= 20; });
 
+            RebuildGeneralLayout();
+            RebuildMaterialLayout();
+            RebuildEffectLayout();
             CreateTooltips();
             ControlFactory.UpdateVisibility();
             ApplyTheme();
@@ -2326,16 +2940,18 @@ namespace Material_Editor
             CreateMaterialControls(material);
 
             if (currentMaterial.Version > 2 && currentMaterial.Version <= 22)
-                listGame.SelectedIndex = (int)Game.FO76;
+                SetGameSelection(Game.FO76);
             else
-                listGame.SelectedIndex = (int)Game.FO4;
+                SetGameSelection(Game.FO4);
 
             if (signature == BGSM.Signature)
-                listMatType.SelectedIndex = (int)MaterialType.Material;
+                SetMaterialTypeSelection(MaterialType.Material);
             else if (signature == BGEM.Signature)
-                listMatType.SelectedIndex = (int)MaterialType.Effect;
+                SetMaterialTypeSelection(MaterialType.Effect);
 
             FillVersionDropdown();
+            UpdateTopLevelSectionVisibility();
+            generalPageSection?.SetCollapsed(true);
             ResumeAll();
 
             saveToolStripMenuItem.Enabled = true;

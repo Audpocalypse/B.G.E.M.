@@ -44,7 +44,7 @@
             this.aboutText.ScrollBars = System.Windows.Forms.RichTextBoxScrollBars.Vertical;
             this.aboutText.Size = new System.Drawing.Size(278, 53);
             this.aboutText.TabIndex = 0;
-            this.aboutText.Text = "B.G.E.M.\nby ousnius\nhttps://github.com/ousnius/Material-Editor";
+            this.aboutText.Text = "B.G.E.M.\nby Audpocalypse\nhttps://github.com/Audpocalypse/B.G.E.M./";
             this.aboutText.LinkClicked += new System.Windows.Forms.LinkClickedEventHandler(this.AboutText_LinkClicked);
             // 
             // AboutDialog
