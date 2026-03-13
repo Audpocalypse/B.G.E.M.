@@ -92,22 +92,39 @@ namespace Material_Editor
         private static readonly Dictionary<string, CustomControl> customControls = [];
 
         public static Action<CustomControl> DefaultChangedCallback;
+        public static Action VisibilityChangedCallback;
 
         public static void ClearControls()
         {
-            foreach (var control in customControls)
+            var parentTables = new HashSet<TableLayoutPanel>();
+
+            foreach (var control in customControls.Values)
             {
-                (control.Value.Control.Parent as TableLayoutPanel).RowCount = 0;
-                (control.Value.Control.Parent as TableLayoutPanel).RowStyles.Clear();
+                CollectParentTable(parentTables, control.LabelControl);
+                CollectParentTable(parentTables, control.Control);
+                CollectParentTable(parentTables, control.ExtraControl);
 
-                control.Value.LabelControl?.Parent.Controls.Remove(control.Value.LabelControl);
-                control.Value.Control?.Parent.Controls.Remove(control.Value.Control);
-                control.Value.ExtraControl?.Parent.Controls.Remove(control.Value.ExtraControl);
+                control.LabelControl?.Parent?.Controls.Remove(control.LabelControl);
+                control.Control?.Parent?.Controls.Remove(control.Control);
+                control.ExtraControl?.Parent?.Controls.Remove(control.ExtraControl);
 
-                control.Value.Dispose();
+                control.Dispose();
+            }
+
+            foreach (var parentTable in parentTables)
+            {
+                parentTable.Controls.Clear();
+                parentTable.RowCount = 0;
+                parentTable.RowStyles.Clear();
             }
 
             customControls.Clear();
+        }
+
+        private static void CollectParentTable(HashSet<TableLayoutPanel> parentTables, Control control)
+        {
+            if (control?.Parent is TableLayoutPanel parentTable)
+                parentTables.Add(parentTable);
         }
         
         public static CustomControl Find(string name)
@@ -174,12 +191,16 @@ namespace Material_Editor
             {
                 control.Value.SetVisible(control.Value.ShouldBeVisible());
             }
+
+            VisibilityChangedCallback?.Invoke();
         }
 
         public static void UpdateVisibility(string name)
         {
             if (customControls.TryGetValue(name, out CustomControl control))
                 control.SetVisible(control.ShouldBeVisible());
+
+            VisibilityChangedCallback?.Invoke();
         }
 
         public static CustomControl CreateControl(TableLayoutPanel parent, string label, object property, Func<CustomControl, bool> visibilityCallback = null, Action<CustomControl> changedCallback = null)

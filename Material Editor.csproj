@@ -15,12 +15,12 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <Copyright>Copyright © 2015 - 2025</Copyright>
-    <Company>ousnius</Company>
-    <Authors>ousnius</Authors>
+    <Company>Audpocalypse</Company>
+    <Authors>Audpocalypse</Authors>
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0</AssemblyVersion>
     <FileVersion>1.0.0</FileVersion>
-    <PackageProjectUrl>https://github.com/ousnius/Material-Editor</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Audpocalypse/B.G.E.M.</PackageProjectUrl>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
