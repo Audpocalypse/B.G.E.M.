@@ -17,7 +17,9 @@
     <Copyright>Copyright © 2015 - 2025</Copyright>
     <Company>ousnius</Company>
     <Authors>ousnius</Authors>
-    <Version>1.9.1</Version>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <FileVersion>1.0.0</FileVersion>
     <PackageProjectUrl>https://github.com/ousnius/Material-Editor</PackageProjectUrl>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
