@@ -28,7 +28,6 @@
         /// </summary>
         private void InitializeComponent()
         {
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(AboutDialog));
             this.aboutText = new System.Windows.Forms.RichTextBox();
             this.SuspendLayout();
             // 
@@ -45,7 +44,7 @@
             this.aboutText.ScrollBars = System.Windows.Forms.RichTextBoxScrollBars.Vertical;
             this.aboutText.Size = new System.Drawing.Size(278, 53);
             this.aboutText.TabIndex = 0;
-            this.aboutText.Text = "MATERIAL EDITOR\nby ousnius\nhttps://github.com/ousnius/Material-Editor";
+            this.aboutText.Text = "B.G.E.M.\nby ousnius\nhttps://github.com/ousnius/Material-Editor";
             this.aboutText.LinkClicked += new System.Windows.Forms.LinkClickedEventHandler(this.AboutText_LinkClicked);
             // 
             // AboutDialog
@@ -56,7 +55,6 @@
             this.ClientSize = new System.Drawing.Size(303, 78);
             this.Controls.Add(this.aboutText);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
-            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.Name = "AboutDialog";

@@ -9,6 +9,7 @@ namespace Material_Editor
         public AboutDialog()
         {
             InitializeComponent();
+            AppIconProvider.Apply(this);
         }
 
         private void AboutText_LinkClicked(object sender, LinkClickedEventArgs e)

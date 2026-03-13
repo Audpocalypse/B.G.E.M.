@@ -20,7 +20,7 @@ namespace Material_Editor
 
         public IReadOnlyList<MaterialFieldDescriptor> SelectedFields { get; private set; }
 
-        public FieldSelectionDialog(IReadOnlyList<MaterialFieldDescriptor> descriptors, BaseMaterialFile baseline, BaseMaterialFile current, ThemePalette palette)
+        public FieldSelectionDialog(IReadOnlyList<MaterialFieldDescriptor> descriptors, BaseMaterialFile baseline, BaseMaterialFile current, ThemePalette palette, UITheme theme)
         {
             Text = "Overwrite Fields";
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -105,7 +105,7 @@ namespace Material_Editor
             CancelButton = cancelButton;
 
             PopulateList(descriptors, baseline, current);
-            ApplyPalette(palette);
+            DialogThemeHelper.Apply(this, palette, theme);
         }
 
         private void PopulateList(IReadOnlyList<MaterialFieldDescriptor> descriptors, BaseMaterialFile baseline, BaseMaterialFile current)
@@ -165,29 +165,5 @@ namespace Material_Editor
                 .ToList();
         }
 
-        private void ApplyPalette(ThemePalette palette)
-        {
-            BackColor = palette.FormBackground;
-            ForeColor = palette.Foreground;
-
-            headerLabel.BackColor = palette.FormBackground;
-            headerLabel.ForeColor = palette.Foreground;
-
-            descriptionHeaderLabel.BackColor = palette.FormBackground;
-            descriptionHeaderLabel.ForeColor = palette.Foreground;
-
-            descriptionLabel.BackColor = palette.PanelBackground;
-            descriptionLabel.ForeColor = palette.Foreground;
-
-            listView.BackColor = palette.PanelBackground;
-            listView.ForeColor = palette.Foreground;
-            listView.GridLines = false;
-            listView.HideSelection = false;
-
-            selectAllButton.BackColor = palette.ControlBackground;
-            selectNoneButton.BackColor = palette.ControlBackground;
-            okButton.BackColor = palette.ControlBackground;
-            descriptionLabel.ForeColor = palette.Foreground;
-        }
     }
 }

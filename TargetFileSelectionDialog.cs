@@ -26,7 +26,7 @@ namespace Material_Editor
 
         public bool BackupBeforeWrite => backupCheckBox.Checked;
 
-        public TargetFileSelectionDialog(ThemePalette palette)
+        public TargetFileSelectionDialog(ThemePalette palette, UITheme theme)
         {
             Text = "Select Target Files";
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -109,7 +109,7 @@ namespace Material_Editor
             AcceptButton = okButton;
             CancelButton = cancelButton;
 
-            ApplyPalette(palette);
+            DialogThemeHelper.Apply(this, palette, theme);
         }
 
         private void AddFiles()
@@ -193,24 +193,5 @@ namespace Material_Editor
             okButton.Enabled = targetList.Items.Count > 0;
         }
 
-        private void ApplyPalette(ThemePalette palette)
-        {
-            BackColor = palette.FormBackground;
-            ForeColor = palette.Foreground;
-
-            introLabel.BackColor = palette.FormBackground;
-            introLabel.ForeColor = palette.Foreground;
-
-            targetList.BackColor = palette.PanelBackground;
-            targetList.ForeColor = palette.Foreground;
-
-            addFilesButton.BackColor = palette.ControlBackground;
-            addFolderButton.BackColor = palette.ControlBackground;
-            removeButton.BackColor = palette.ControlBackground;
-            okButton.BackColor = palette.ControlBackground;
-            cancelButton.BackColor = palette.ControlBackground;
-            backupCheckBox.BackColor = palette.FormBackground;
-            backupCheckBox.ForeColor = palette.Foreground;
-        }
     }
 }

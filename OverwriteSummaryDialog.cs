@@ -12,7 +12,7 @@ namespace Material_Editor
         private readonly Label summaryLabel;
         private readonly Button okButton;
 
-        public OverwriteSummaryDialog(IReadOnlyList<FieldCopyResult> results, ThemePalette palette)
+        public OverwriteSummaryDialog(IReadOnlyList<FieldCopyResult> results, ThemePalette palette, UITheme theme)
         {
             Text = "Overwrite Summary";
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -74,23 +74,7 @@ namespace Material_Editor
             this.listView = listView;
             this.okButton = okButton;
 
-            ApplyPalette(palette);
-        }
-
-        private void ApplyPalette(ThemePalette palette)
-        {
-            BackColor = palette.FormBackground;
-            ForeColor = palette.Foreground;
-
-            listView.BackColor = palette.PanelBackground;
-            listView.ForeColor = palette.Foreground;
-            listView.GridLines = false;
-
-            summaryLabel.BackColor = palette.FormBackground;
-            summaryLabel.ForeColor = palette.Foreground;
-
-            okButton.BackColor = palette.ControlBackground;
-            okButton.ForeColor = palette.Foreground;
+            DialogThemeHelper.Apply(this, palette, theme);
         }
     }
 }

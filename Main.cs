@@ -49,6 +49,7 @@ namespace Material_Editor
 
         private const int DefaultVersionFO4 = 2;
         private const int DefaultVersionFO76 = 21;
+        private const string ApplicationTitle = "B.G.E.M.";
 
         private string WorkFileName
         {
@@ -80,6 +81,7 @@ namespace Material_Editor
         {
             config = initialConfig;
             InitializeComponent();
+            AppIconProvider.Apply(this);
             tabControl.DrawMode = TabDrawMode.OwnerDrawFixed;
             tabControl.PaletteProvider = () => GetPalette(config.Theme);
             tabControl.Paint += TabControl_Paint;
@@ -100,11 +102,37 @@ namespace Material_Editor
             return Path.ChangeExtension(filePath, ext);
         }
 
+        private string BuildSuggestedVariationOutputPattern()
+        {
+            string sourcePath = workFilePath;
+            if (!string.IsNullOrWhiteSpace(sourcePath))
+            {
+                try
+                {
+                    var directory = Path.GetDirectoryName(sourcePath) ?? string.Empty;
+                    var extension = Path.GetExtension(sourcePath);
+                    if (string.IsNullOrEmpty(extension))
+                        extension = ".bgsm";
+
+                    var fileName = Path.GetFileNameWithoutExtension(sourcePath);
+                    if (string.IsNullOrEmpty(fileName))
+                        fileName = "variation";
+
+                    return Path.Combine(directory, $"{fileName}_{{index}}{extension}");
+                }
+                catch
+                {
+                }
+            }
+
+            return "variation_{index}.bgsm";
+        }
+
         #region UI
         private void NewToolStripMenuItem_Click(object sender, EventArgs e)
         {
             workFilePath = null;
-            Text = "Material Editor";
+            Text = ApplicationTitle;
 
             saveAsToolStripMenuItem.Enabled = true;
             closeToolStripMenuItem.Enabled = true;
@@ -309,21 +337,69 @@ namespace Material_Editor
             var baseline = originalMaterial ?? CloneMaterial(currentState) ?? currentState;
 
             var palette = GetPalette(config.Theme);
-            using var fieldSelection = new FieldSelectionDialog(descriptors, baseline, currentState, palette);
+            using var fieldSelection = new FieldSelectionDialog(descriptors, baseline, currentState, palette, config.Theme);
             if (fieldSelection.ShowDialog(this) != DialogResult.OK)
                 return;
 
             if (fieldSelection.SelectedFields == null || fieldSelection.SelectedFields.Count == 0)
                 return;
 
-            using var targetDialog = new TargetFileSelectionDialog(palette);
+            using var targetDialog = new TargetFileSelectionDialog(palette, config.Theme);
             if (targetDialog.ShowDialog(this) != DialogResult.OK)
                 return;
 
             var tool = new FieldOverwriteTool();
             var results = tool.Run(currentState, fieldSelection.SelectedFields, targetDialog.TargetFiles, targetDialog.BackupBeforeWrite);
 
-            using var summary = new OverwriteSummaryDialog(results, palette);
+            using var summary = new OverwriteSummaryDialog(results, palette, config.Theme);
+            summary.ShowDialog(this);
+        }
+
+        private void GenerateVariationsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (currentMaterial == null)
+            {
+                MessageBox.Show("Open a material before generating variations.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (currentMaterial.GetType() != typeof(BGSM))
+            {
+                MessageBox.Show("Generating variations is only supported for BGSM materials.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var template = CaptureCurrentMaterialState();
+            if (template == null)
+                return;
+
+            var descriptors = MaterialFieldRegistry.GetDescriptors(template)
+                .Where(descriptor => descriptor.Category == FieldCategory.Material)
+                .Where(descriptor => descriptor.GetValue(template) is string)
+                .ToList();
+
+            if (descriptors.Count == 0)
+            {
+                MessageBox.Show("No texture fields are available for variation.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var currentValues = descriptors.Select(descriptor => descriptor.GetValue(template) as string ?? string.Empty).ToList();
+            var palette = GetPalette(config.Theme);
+            using var dialog = new VariationGeneratorDialog(
+                descriptors,
+                currentValues,
+                BuildSuggestedVariationOutputPattern(),
+                palette,
+                config.Theme);
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            if (dialog.Options == null)
+                return;
+
+            var results = MaterialVariationGenerator.Generate(template, dialog.Options, serializeToJSONToolStripMenuItem.Checked);
+            using var summary = new OverwriteSummaryDialog(results, palette, config.Theme);
             summary.ShowDialog(this);
         }
 
@@ -344,7 +420,7 @@ namespace Material_Editor
             ControlFactory.ClearControls();
             ResumeAll();
 
-            Text = "Material Editor";
+            Text = ApplicationTitle;
             changed = false;
         }
 
@@ -1106,10 +1182,14 @@ namespace Material_Editor
 
         private string GetTitleText()
         {
+            string fileName = WorkFileName;
+            if (string.IsNullOrEmpty(fileName))
+                return ApplicationTitle;
+
             if (currentMaterial != null)
-                return $"{WorkFileName} (Version {currentMaterial.Version})";
-            else
-                return $"{WorkFileName}";
+                return $"{ApplicationTitle} – {fileName} (Version {currentMaterial.Version})";
+
+            return $"{ApplicationTitle} – {fileName}";
         }
         #endregion
 
@@ -1586,44 +1666,7 @@ namespace Material_Editor
 
         private BaseMaterialFile CloneMaterial(BaseMaterialFile source)
         {
-            if (source == null)
-                return null;
-
-            string tempPath = null;
-            try
-            {
-                tempPath = Path.GetTempFileName();
-                using var stream = new FileStream(tempPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
-                if (!source.Save(stream))
-                    return source;
-
-                stream.Position = 0;
-                var clone = (BaseMaterialFile)Activator.CreateInstance(source.GetType());
-                if (clone == null)
-                    return source;
-
-                if (!clone.Open(stream))
-                    return source;
-
-                return clone;
-            }
-            catch
-            {
-                return source;
-            }
-            finally
-            {
-                if (!string.IsNullOrEmpty(tempPath))
-                {
-                    try
-                    {
-                        File.Delete(tempPath);
-                    }
-                    catch
-                    {
-                    }
-                }
-            }
+            return MaterialFileCloner.Clone(source);
         }
 
         private void CreateTooltips()

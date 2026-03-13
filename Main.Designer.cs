@@ -29,7 +29,6 @@
         private void InitializeComponent()
         {
             components = new System.ComponentModel.Container();
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Main));
             menuStrip = new System.Windows.Forms.MenuStrip();
             fileToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             newToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -47,6 +46,7 @@
             toolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
             aboutToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             toolsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            generateVariationsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             overwriteFilesByFieldToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             openFileDialog = new System.Windows.Forms.OpenFileDialog();
             saveFileDialog = new System.Windows.Forms.SaveFileDialog();
@@ -149,10 +149,17 @@
             // 
             // toolsToolStripMenuItem
             // 
-            toolsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] { overwriteFilesByFieldToolStripMenuItem });
+            toolsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] { generateVariationsToolStripMenuItem, overwriteFilesByFieldToolStripMenuItem });
             toolsToolStripMenuItem.Name = "toolsToolStripMenuItem";
             toolsToolStripMenuItem.Size = new System.Drawing.Size(46, 20);
             toolsToolStripMenuItem.Text = "Tools";
+            // 
+            // generateVariationsToolStripMenuItem
+            // 
+            generateVariationsToolStripMenuItem.Name = "generateVariationsToolStripMenuItem";
+            generateVariationsToolStripMenuItem.Size = new System.Drawing.Size(257, 22);
+            generateVariationsToolStripMenuItem.Text = "Generate Variations...";
+            generateVariationsToolStripMenuItem.Click += GenerateVariationsToolStripMenuItem_Click;
             // 
             // overwriteFilesByFieldToolStripMenuItem
             // 
@@ -388,11 +395,10 @@
             Controls.Add(tabControl);
             Controls.Add(menuStrip);
             DoubleBuffered = true;
-            Icon = (System.Drawing.Icon)resources.GetObject("$this.Icon");
             MainMenuStrip = menuStrip;
             MinimumSize = new System.Drawing.Size(640, 260);
             Name = "Main";
-            Text = "Material Editor";
+            Text = "B.G.E.M.";
             FormClosing += Main_Closing;
             Load += Main_Load;
             ResizeBegin += Main_ResizeBegin;
@@ -430,6 +436,7 @@
         private System.Windows.Forms.TabPage tabPageGeneral;
         private System.Windows.Forms.ToolStripMenuItem toolStripMenuItem1;
         private System.Windows.Forms.ToolStripMenuItem aboutToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem generateVariationsToolStripMenuItem;
         private System.Windows.Forms.OpenFileDialog textureFileDialog;
         private System.Windows.Forms.ToolStripMenuItem serializeToJSONToolStripMenuItem;
         private System.Windows.Forms.TableLayoutPanel layoutGeneral;
