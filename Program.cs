@@ -16,10 +16,22 @@ namespace Material_Editor
             try
             {
                 ApplicationConfiguration.Initialize();
-                var config = Material_Editor.Main.LoadConfig();
-                if (config.Font != null)
-                    Application.SetDefaultFont(config.Font);
-                Application.Run(new Material_Editor.Main(config));
+                var config = Material_Editor.Forms.Main.LoadConfig();
+                AppearanceInitializationResult appearanceInitialization = AppearanceService.Initialize(config.ThemeId, config.Font);
+                config.ThemeId = appearanceInitialization.ActiveAppearance.Theme.Id;
+                config.Font = appearanceInitialization.ActiveAppearance.Font;
+                Application.SetDefaultFont(config.Font);
+
+                if (!string.IsNullOrWhiteSpace(appearanceInitialization.StartupWarning))
+                {
+                    MessageBox.Show(
+                        appearanceInitialization.StartupWarning,
+                        "Theme Warning",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
+
+                Application.Run(new Material_Editor.Forms.Main(config));
             }
             catch (Exception ex)
             {

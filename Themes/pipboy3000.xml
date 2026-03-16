@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<theme id="pipboy3000" name="Pip-boy3000">
+  <palette
+    formBackground="#0A0C05"
+    controlBackground="#212511"
+    panelBackground="#18200E"
+    menuBackground="#0C0F08"
+    foreground="#9FFF65"
+    accent="#58B247" />
+  <semantic
+    success="#9FFF65"
+    warning="#FFD966"
+    error="#FF7C66"
+    dirty="#58B247"
+    readOnly="#47513A"
+    loadError="#FF7C66"
+    validation="#FFD966"
+    checkboxOff="#E0F2A2"
+    selectedToggle="#000000" />
+</theme>

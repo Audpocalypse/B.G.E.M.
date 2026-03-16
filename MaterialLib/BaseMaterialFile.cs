@@ -497,6 +497,7 @@ namespace MaterialLib
             }
         }
 
+        [Flags]
         public enum MaskWriteFlags
         {
             ALBEDO = 1,

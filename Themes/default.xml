@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<theme id="default" name="Default">
+  <palette
+    formBackground="#F0F0F0"
+    controlBackground="#F0F0F0"
+    panelBackground="#F5F5F5"
+    menuBackground="#F0F0F0"
+    foreground="#000000"
+    accent="empty" />
+  <semantic
+    success="#008000"
+    warning="#FF8C00"
+    error="#B22222"
+    dirty="#228B22"
+    readOnly="#A9A9A9"
+    loadError="#B22222"
+    validation="#DAA520"
+    checkboxOff="#FF0000"
+    selectedToggle="#A9A9A9" />
+</theme>

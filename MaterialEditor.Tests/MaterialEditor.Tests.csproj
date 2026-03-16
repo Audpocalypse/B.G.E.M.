@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="bgem">
+      <HintPath>..\bin\$(Configuration)\net8.0-windows10.0.22621.0\bgem.dll</HintPath>
+    </Reference>
+    <Reference Include="MaterialLib">
+      <HintPath>..\MaterialLib\bin\$(Configuration)\net8.0\MaterialLib.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="BuildAppBeforeTests" BeforeTargets="BeforeBuild">
+    <MSBuild Projects="..\Material Editor.csproj" Targets="Build" Properties="RestoreIgnoreFailedSources=true;NuGetAudit=false" />
+  </Target>
+
+</Project>
