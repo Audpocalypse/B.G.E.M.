@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<theme id="transpridedark" name="Trans Pride Dark">
+  <palette formBackground="#2D76BF" controlBackground="#CF709F" panelBackground="#E1A8C5" menuBackground="#C26B97" foreground="#600080" accent="#53A9FF" borderColor="#00FFFF" tableBorderColor="#53A9FF" menuForeground="#9DCEFF" labelForeground="#DDBBFF" editableForeground="#000000" />
+  <semantic success="#9FFF65" warning="#FFD966" error="#FF7C66" dirty="#58B247" readOnly="#47513A" loadError="#FF7C66" validation="#FFD966" checkboxOff="#58B247" selectedToggle="#AAD5FF" />
+</theme>

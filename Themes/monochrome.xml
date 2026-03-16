@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<theme id="monochrome" name="Monochrome Dark">
+  <palette formBackground="#1D1D1D" controlBackground="#000000" panelBackground="#000000" menuBackground="#515151" foreground="#FFFFFF" accent="#6F6F6F" borderColor="#FFFFFF" tableBorderColor="#666666" alternatingRowBackground="#3C3C3C" menuForeground="#FFFFFF" labelForeground="#FFFFFF" editableForeground="#FFFFFF" />
+  <semantic success="#9FFF65" warning="#FFD966" error="#FF7C66" dirty="#58B247" readOnly="#47513A" loadError="#FF7C66" validation="#FFD966" checkboxOff="#58B247" selectedToggle="#000000" />
+</theme>

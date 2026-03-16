@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<theme id="nbpride" name="Non-Binary Pride">
+  <palette formBackground="#CACA60" controlBackground="#9568C1" panelBackground="#EBEBEB" menuBackground="#000000" foreground="#600080" accent="#D9D900" borderColor="#000000" tableBorderColor="#000000" menuForeground="#FFFF80" labelForeground="#000000" editableForeground="#000000" />
+  <semantic success="#9FFF65" warning="#FFD966" error="#FF7C66" dirty="#58B247" readOnly="#47513A" loadError="#FF7C66" validation="#FFD966" checkboxOff="#58B247" selectedToggle="#FFFF80" />
+</theme>
