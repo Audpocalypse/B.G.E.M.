@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<theme id="laterite" name="Laterite">
+  <palette formBackground="#333333" controlBackground="#2D1112" panelBackground="#4A3334" menuBackground="#6D3637" foreground="#CBCBCB" accent="empty" />
+  <semantic success="#9FFF65" warning="#FFD966" error="#FF7C66" dirty="#58B247" readOnly="#47513A" loadError="#FF7C66" validation="#FFD966" checkboxOff="#58B247" selectedToggle="#000000" />
+</theme>

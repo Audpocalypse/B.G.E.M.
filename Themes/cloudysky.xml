@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<theme id="cloudysky" name="Cloudy Sky">
+  <palette formBackground="#F3ECFD" controlBackground="#E1E6FF" panelBackground="#F3ECFD" menuBackground="#9AD6FA" foreground="#1E346F" accent="#341FF1" />
+  <semantic success="#3C9D00" warning="#FDBE00" error="#FF7C66" dirty="#4A963D" readOnly="#47513A" loadError="#FF7C66" validation="#FFD966" checkboxOff="#58B247" selectedToggle="#F7F7F7" />
+</theme>

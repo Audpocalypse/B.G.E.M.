@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<theme id="slate" name="Slate">
+  <palette formBackground="#263740" controlBackground="#172126" panelBackground="#263740" menuBackground="#3D5967" foreground="#CBCBCB" accent="empty" />
+  <semantic success="#9FFF65" warning="#FFD966" error="#FF7C66" dirty="#58B247" readOnly="#47513A" loadError="#FF7C66" validation="#FFD966" checkboxOff="#58B247" selectedToggle="#000000" />
+</theme>
