@@ -108,7 +108,13 @@ namespace Material_Editor.Theming
                         new XAttribute("panelBackground", ThemeColorSerialization.Format(theme.Palette.PanelBackground)),
                         new XAttribute("menuBackground", ThemeColorSerialization.Format(theme.Palette.MenuBackground)),
                         new XAttribute("foreground", ThemeColorSerialization.Format(theme.Palette.Foreground)),
-                        new XAttribute("accent", ThemeColorSerialization.Format(theme.Palette.Accent, allowEmpty: true))),
+                        new XAttribute("accent", ThemeColorSerialization.Format(theme.Palette.Accent, allowEmpty: true)),
+                        new XAttribute("borderColor", ThemeColorSerialization.Format(theme.Palette.BorderColor)),
+                        new XAttribute("tableBorderColor", ThemeColorSerialization.Format(theme.Palette.TableBorderColor)),
+                        new XAttribute("alternatingRowBackground", ThemeColorSerialization.Format(theme.Palette.AlternatingRowBackground, allowEmpty: true)),
+                        new XAttribute("menuForeground", ThemeColorSerialization.Format(theme.Palette.MenuForeground)),
+                        new XAttribute("labelForeground", ThemeColorSerialization.Format(theme.Palette.LabelForeground)),
+                        new XAttribute("editableForeground", ThemeColorSerialization.Format(theme.Palette.EditableForeground))),
                     new XElement(
                         "semantic",
                         new XAttribute("success", ThemeColorSerialization.Format(theme.Semantics.Success)),
@@ -135,7 +141,13 @@ namespace Material_Editor.Theming
                     Color.WhiteSmoke,
                     SystemColors.Control,
                     SystemColors.ControlText,
-                    Color.Empty),
+                    Color.Empty,
+                    SystemColors.ControlText,
+                    SystemColors.ControlText,
+                    BlendAlternatingRows(Color.WhiteSmoke, SystemColors.Control),
+                    SystemColors.ControlText,
+                    SystemColors.ControlText,
+                    SystemColors.ControlText),
                 new ThemeSemanticColors(
                     Color.Green,
                     Color.DarkOrange,
@@ -168,6 +180,11 @@ namespace Material_Editor.Theming
                 string displayName = GetRequiredAttribute(root, "name");
                 XElement paletteElement = GetRequiredChild(root, "palette");
                 XElement semanticElement = GetRequiredChild(root, "semantic");
+                Color foreground = ParseColor(paletteElement, "foreground");
+                Color accent = ParseColor(paletteElement, "accent", allowEmpty: true);
+                Color borderColor = ParseOptionalColor(paletteElement, "borderColor", accent.IsEmpty ? foreground : accent);
+                Color panelBackground = ParseColor(paletteElement, "panelBackground");
+                Color menuBackground = ParseColor(paletteElement, "menuBackground");
 
                 theme = new ThemeDefinition(
                     id,
@@ -175,10 +192,16 @@ namespace Material_Editor.Theming
                     new ThemePalette(
                         ParseColor(paletteElement, "formBackground"),
                         ParseColor(paletteElement, "controlBackground"),
-                        ParseColor(paletteElement, "panelBackground"),
-                        ParseColor(paletteElement, "menuBackground"),
-                        ParseColor(paletteElement, "foreground"),
-                        ParseColor(paletteElement, "accent", allowEmpty: true)),
+                        panelBackground,
+                        menuBackground,
+                        foreground,
+                        accent,
+                        borderColor,
+                        ParseOptionalColor(paletteElement, "tableBorderColor", borderColor),
+                        ParseOptionalColor(paletteElement, "alternatingRowBackground", BlendAlternatingRows(panelBackground, menuBackground), allowEmpty: true),
+                        ParseOptionalColor(paletteElement, "menuForeground", foreground),
+                        ParseOptionalColor(paletteElement, "labelForeground", foreground),
+                        ParseOptionalColor(paletteElement, "editableForeground", foreground)),
                     new ThemeSemanticColors(
                         ParseColor(semanticElement, "success"),
                         ParseColor(semanticElement, "warning"),
@@ -229,6 +252,27 @@ namespace Material_Editor.Theming
                 throw new InvalidDataException($"attribute '{attributeName}' must use #RRGGBB or #AARRGGBB format.");
 
             return color;
+        }
+
+        private static Color ParseOptionalColor(XElement element, string attributeName, Color fallback, bool allowEmpty = false)
+        {
+            var attribute = element.Attribute(attributeName);
+            string rawValue = attribute?.Value?.Trim();
+            if (string.IsNullOrWhiteSpace(rawValue))
+                return fallback;
+
+            if (allowEmpty && string.Equals(rawValue, "empty", StringComparison.OrdinalIgnoreCase))
+                return Color.Empty;
+
+            if (!ThemeColorSerialization.TryParse(rawValue, out Color color))
+                throw new InvalidDataException($"attribute '{attributeName}' must use #RRGGBB or #AARRGGBB format.");
+
+            return color;
+        }
+
+        private static Color BlendAlternatingRows(Color panelBackground, Color menuBackground)
+        {
+            return ThemeApplicator.Blend(panelBackground, menuBackground, 0.12d);
         }
     }
 }

@@ -4,7 +4,19 @@ namespace Material_Editor.Theming
 {
     public readonly struct ThemePalette
     {
-        public ThemePalette(Color formBackground, Color controlBackground, Color panelBackground, Color menuBackground, Color foreground, Color accent)
+        public ThemePalette(
+            Color formBackground,
+            Color controlBackground,
+            Color panelBackground,
+            Color menuBackground,
+            Color foreground,
+            Color accent,
+            Color borderColor,
+            Color tableBorderColor,
+            Color alternatingRowBackground,
+            Color menuForeground,
+            Color labelForeground,
+            Color editableForeground)
         {
             FormBackground = formBackground;
             ControlBackground = controlBackground;
@@ -12,6 +24,12 @@ namespace Material_Editor.Theming
             MenuBackground = menuBackground;
             Foreground = foreground;
             Accent = accent;
+            BorderColor = borderColor;
+            TableBorderColor = tableBorderColor;
+            AlternatingRowBackground = alternatingRowBackground;
+            MenuForeground = menuForeground;
+            LabelForeground = labelForeground;
+            EditableForeground = editableForeground;
         }
 
         public Color FormBackground { get; }
@@ -20,6 +38,12 @@ namespace Material_Editor.Theming
         public Color MenuBackground { get; }
         public Color Foreground { get; }
         public Color Accent { get; }
+        public Color BorderColor { get; }
+        public Color TableBorderColor { get; }
+        public Color AlternatingRowBackground { get; }
+        public Color MenuForeground { get; }
+        public Color LabelForeground { get; }
+        public Color EditableForeground { get; }
     }
 
     public readonly struct ThemeSemanticColors

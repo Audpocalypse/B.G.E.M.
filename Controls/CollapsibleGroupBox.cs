@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using Material_Editor.Theming;
 
 namespace Material_Editor.Controls
 {
@@ -21,7 +22,7 @@ namespace Material_Editor.Controls
             Dock = DockStyle.Top;
             Margin = new Padding(0, 0, 0, 6);
             Padding = new Padding(6, 16, 6, 6);
-            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             UpdateStyles();
 
             ContentLayout = new TableLayoutPanel
@@ -131,6 +132,17 @@ namespace Material_Editor.Controls
                 return;
 
             SendMessage(control.Handle, WM_SETREDRAW, enable ? new IntPtr(1) : IntPtr.Zero, IntPtr.Zero);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            if (!ThemeService.IsInitialized)
+            {
+                base.OnPaint(e);
+                return;
+            }
+
+            ThemeApplicator.DrawGroupBox(e.Graphics, this, ThemeService.CurrentTheme);
         }
 
         [DllImport("user32.dll")]

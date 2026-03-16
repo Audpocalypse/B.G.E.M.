@@ -145,6 +145,12 @@ namespace Material_Editor.Dialogs
             AddColorEditor(paletteLayout, "Menu Background", seedTheme.Palette.MenuBackground);
             AddColorEditor(paletteLayout, "Foreground", seedTheme.Palette.Foreground);
             AddColorEditor(paletteLayout, "Accent", seedTheme.Palette.Accent, allowEmpty: true);
+            AddColorEditor(paletteLayout, "Container Border", seedTheme.Palette.BorderColor);
+            AddColorEditor(paletteLayout, "Table Border", seedTheme.Palette.TableBorderColor);
+            AddColorEditor(paletteLayout, "Alternating Rows", seedTheme.Palette.AlternatingRowBackground, allowEmpty: true);
+            AddColorEditor(paletteLayout, "Menu Text", seedTheme.Palette.MenuForeground);
+            AddColorEditor(paletteLayout, "Label Text", seedTheme.Palette.LabelForeground);
+            AddColorEditor(paletteLayout, "Editable Text", seedTheme.Palette.EditableForeground);
 
             var semanticGroup = CreateGroupBox("Semantic Colors");
             editorLayout.Controls.Add(semanticGroup, 0, 3);
@@ -163,7 +169,8 @@ namespace Material_Editor.Dialogs
             previewFrame = new Panel
             {
                 Dock = DockStyle.Fill,
-                BorderStyle = BorderStyle.FixedSingle,
+                BorderStyle = BorderStyle.None,
+                Padding = new Padding(1),
                 Margin = new Padding(0)
             };
             bodyLayout.Controls.Add(previewFrame, 1, 0);
@@ -217,7 +224,7 @@ namespace Material_Editor.Dialogs
             previewLayout.Controls.Add(CreateInputsPreview(), 0, 2);
             previewLayout.Controls.Add(CreatePreviewHeader("Paths & Toggles"), 0, 3);
             previewLayout.Controls.Add(CreatePathAndTogglePreview(out previewToggleOn, out previewToggleOff, out previewCheckBox, out previewRadioSelected, out previewRadioClear, out previewPathTextBox), 0, 4);
-            previewLayout.Controls.Add(CreatePreviewHeader("Lists"), 0, 5);
+            previewLayout.Controls.Add(CreatePreviewHeader("Tables"), 0, 5);
             previewLayout.Controls.Add(CreateListPreview(out previewListView, out previewGrid), 0, 6);
             previewLayout.Controls.Add(CreatePreviewHeader("Semantic States"), 0, 7);
             previewLayout.Controls.Add(CreateSemanticPreview(
@@ -506,9 +513,18 @@ namespace Material_Editor.Dialogs
             };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44f));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 56f));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             var listGroup = CreateGroupBox("List View");
             layout.Controls.Add(listGroup, 0, 0);
+
+            var listHost = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 210,
+                Margin = new Padding(12, 10, 12, 12)
+            };
+            listGroup.Controls.Add(listHost);
 
             listView = new ListView
             {
@@ -516,18 +532,25 @@ namespace Material_Editor.Dialogs
                 View = View.Details,
                 FullRowSelect = true,
                 HeaderStyle = ColumnHeaderStyle.Nonclickable,
-                Margin = new Padding(12, 10, 12, 12),
-                Height = 180
+                Margin = new Padding(0)
             };
             listView.Columns.Add("Field", 160);
             listView.Columns.Add("Value", 220);
             listView.Items.Add(new ListViewItem(new[] { "Diffuse Texture", "Textures\\metal\\sheet_d.dds" }));
             listView.Items.Add(new ListViewItem(new[] { "Alpha", "0.45" }));
             listView.Items.Add(new ListViewItem(new[] { "Lighting", "Enabled" }));
-            listGroup.Controls.Add(listView);
+            listHost.Controls.Add(listView);
 
             var gridGroup = CreateGroupBox("Data Grid");
             layout.Controls.Add(gridGroup, 1, 0);
+
+            var gridHost = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 260,
+                Margin = new Padding(12, 10, 12, 12)
+            };
+            gridGroup.Controls.Add(gridHost);
 
             grid = new DataGridView
             {
@@ -538,18 +561,21 @@ namespace Material_Editor.Dialogs
                 MultiSelect = false,
                 SelectionMode = DataGridViewSelectionMode.CellSelect,
                 RowHeadersVisible = false,
-                Margin = new Padding(12, 10, 12, 12),
-                Height = 180
+                Margin = new Padding(0),
+                ScrollBars = ScrollBars.Vertical
             };
             grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "State", HeaderText = "State", Frozen = true, Width = 120 });
             grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Value", HeaderText = "Value", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
-            grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Enabled", HeaderText = "Enabled", Width = 70 });
-            grid.Rows.Add("Normal", "Painted metal", true);
+            grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Enabled", HeaderText = "Enabled", Width = 70, ThreeState = true });
+            grid.Rows.Add("Normal A", "Painted metal", true);
+            grid.Rows.Add("Normal B", "Brushed steel", false);
             grid.Rows.Add("Read-only", "Version locked", false);
             grid.Rows.Add("Validation", "Missing token", true);
             grid.Rows.Add("Dirty", "Changed diffuse path", true);
             grid.Rows.Add("Load Error", "Could not load source", false);
-            gridGroup.Controls.Add(grid);
+            grid.Rows.Add(string.Empty, string.Empty, null);
+            grid.Rows.Add(string.Empty, string.Empty, null);
+            gridHost.Controls.Add(grid);
 
             return layout;
         }
@@ -706,6 +732,12 @@ namespace Material_Editor.Dialogs
             editable.Palette.MenuBackground = FindEditor("Menu Background").GetColorValue();
             editable.Palette.Foreground = FindEditor("Foreground").GetColorValue();
             editable.Palette.Accent = FindEditor("Accent").GetColorValue();
+            editable.Palette.BorderColor = FindEditor("Container Border").GetColorValue();
+            editable.Palette.TableBorderColor = FindEditor("Table Border").GetColorValue();
+            editable.Palette.AlternatingRowBackground = FindEditor("Alternating Rows").GetColorValue();
+            editable.Palette.MenuForeground = FindEditor("Menu Text").GetColorValue();
+            editable.Palette.LabelForeground = FindEditor("Label Text").GetColorValue();
+            editable.Palette.EditableForeground = FindEditor("Editable Text").GetColorValue();
 
             editable.Semantics.Success = FindEditor("Success").GetColorValue();
             editable.Semantics.Warning = FindEditor("Warning").GetColorValue();
@@ -739,7 +771,7 @@ namespace Material_Editor.Dialogs
                 return;
 
             var previewAppearance = new AppearanceDefinition(theme, ActiveAppearance?.Font ?? Font ?? SystemFonts.MessageBoxFont);
-            previewFrame.BackColor = theme.Palette.FormBackground;
+            previewFrame.BackColor = ThemeApplicator.GetBorderColor(theme);
             previewRoot.BackColor = theme.Palette.FormBackground;
 
             AppearanceApplicator.ApplyToContainer(previewRoot, previewAppearance, theme.Palette.FormBackground);
@@ -761,48 +793,45 @@ namespace Material_Editor.Dialogs
             previewErrorLabel.ForeColor = theme.Semantics.Error;
 
             ApplyStateLabel(previewDirtyLabel, ThemeApplicator.GetDirtyBackground(theme), theme.Palette.Foreground);
-            ApplyStateLabel(previewReadOnlyLabel, ThemeApplicator.GetReadOnlyBackground(theme), theme.Palette.Foreground);
+            ApplyStateLabel(previewReadOnlyLabel, ThemeApplicator.GetReadOnlyBackground(theme), ThemeApplicator.GetEditableForeground(theme));
             ApplyStateLabel(previewLoadErrorLabel, ThemeApplicator.GetLoadErrorBackground(theme), theme.Palette.Foreground);
-            ApplyStateLabel(previewValidationLabel, ThemeApplicator.GetValidationBackground(theme), theme.Palette.Foreground);
+            ApplyStateLabel(previewValidationLabel, ThemeApplicator.GetValidationBackground(theme), ThemeApplicator.GetEditableForeground(theme));
         }
 
         private void ApplyPreviewGridState(ThemeDefinition theme)
         {
-            if (previewGrid.Columns.Count == 0 || previewGrid.Rows.Count < 5)
+            if (previewGrid.Columns.Count == 0 || previewGrid.Rows.Count < 6)
                 return;
 
             previewGrid.ClearSelection();
+
+            foreach (DataGridViewRow row in previewGrid.Rows)
+                ResetPreviewGridRow(row);
 
             if (previewGrid.Columns["State"] is DataGridViewColumn frozenColumn)
             {
                 frozenColumn.Frozen = true;
                 frozenColumn.DefaultCellStyle.BackColor = ThemeApplicator.GetFrozenColumnBackground(theme);
-                frozenColumn.DefaultCellStyle.ForeColor = theme.Palette.Foreground;
+                frozenColumn.DefaultCellStyle.ForeColor = ThemeApplicator.GetEditableForeground(theme);
             }
 
-            ResetPreviewGridRow(previewGrid.Rows[0]);
-
-            DataGridViewRow readOnlyRow = previewGrid.Rows[1];
-            ResetPreviewGridRow(readOnlyRow);
+            DataGridViewRow readOnlyRow = previewGrid.Rows[2];
             readOnlyRow.Cells["Value"].Style.BackColor = ThemeApplicator.GetReadOnlyBackground(theme);
             readOnlyRow.Cells["Value"].ReadOnly = true;
 
-            DataGridViewRow validationRow = previewGrid.Rows[2];
-            ResetPreviewGridRow(validationRow);
+            DataGridViewRow validationRow = previewGrid.Rows[3];
             validationRow.Cells["Value"].Style.BackColor = ThemeApplicator.GetValidationBackground(theme);
 
-            DataGridViewRow dirtyRow = previewGrid.Rows[3];
-            ResetPreviewGridRow(dirtyRow);
+            DataGridViewRow dirtyRow = previewGrid.Rows[4];
             dirtyRow.DefaultCellStyle.BackColor = ThemeApplicator.GetDirtyBackground(theme);
-            dirtyRow.DefaultCellStyle.ForeColor = theme.Palette.Foreground;
+            dirtyRow.DefaultCellStyle.ForeColor = ThemeApplicator.GetEditableForeground(theme);
 
-            DataGridViewRow loadErrorRow = previewGrid.Rows[4];
-            ResetPreviewGridRow(loadErrorRow);
+            DataGridViewRow loadErrorRow = previewGrid.Rows[5];
             loadErrorRow.DefaultCellStyle.BackColor = ThemeApplicator.GetLoadErrorBackground(theme);
-            loadErrorRow.DefaultCellStyle.ForeColor = theme.Palette.Foreground;
+            loadErrorRow.DefaultCellStyle.ForeColor = ThemeApplicator.GetEditableForeground(theme);
 
-            previewGrid.CurrentCell = previewGrid.Rows[0].Cells["Value"];
-            previewGrid.Rows[0].Cells["Value"].Selected = true;
+            previewGrid.CurrentCell = previewGrid.Rows[1].Cells["Value"];
+            previewGrid.Rows[1].Cells["Value"].Selected = true;
         }
 
         private void ResetPreviewGridRow(DataGridViewRow row)
@@ -850,7 +879,7 @@ namespace Material_Editor.Dialogs
 
         private static GroupBox CreateGroupBox(string text)
         {
-            return new GroupBox
+            return new ThemedGroupBox
             {
                 Text = text,
                 Dock = DockStyle.Top,

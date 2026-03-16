@@ -22,7 +22,7 @@ namespace Material_Editor.Controls
             checkedColor = theme?.Semantics.Success ?? Color.Green;
             uncheckedColor = theme?.Semantics.Error ?? Color.Red;
             BackColor = background;
-            ForeColor = theme?.Palette.Foreground ?? SystemColors.ControlText;
+            ForeColor = ThemeApplicator.GetLabelForeground(theme);
             Invalidate();
         }
 
@@ -80,7 +80,7 @@ namespace Material_Editor.Controls
             return new ThemeDefinition(
                 "toggle",
                 "Toggle",
-                new ThemePalette(BackColor, BackColor, BackColor, BackColor, ForeColor, Color.Empty),
+                new ThemePalette(BackColor, BackColor, BackColor, BackColor, ForeColor, Color.Empty, ForeColor, ForeColor, BackColor, ForeColor, ForeColor, ForeColor),
                 new ThemeSemanticColors(checkedColor, Color.Empty, uncheckedColor, Color.Empty, Color.Empty, Color.Empty, Color.Empty, uncheckedColor, Color.Empty));
         }
     }

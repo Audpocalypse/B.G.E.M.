@@ -22,7 +22,13 @@ namespace Material_Editor.Theming
                     PanelBackground = theme?.Palette.PanelBackground ?? Color.Empty,
                     MenuBackground = theme?.Palette.MenuBackground ?? Color.Empty,
                     Foreground = theme?.Palette.Foreground ?? Color.Empty,
-                    Accent = theme?.Palette.Accent ?? Color.Empty
+                    Accent = theme?.Palette.Accent ?? Color.Empty,
+                    BorderColor = theme?.Palette.BorderColor ?? Color.Empty,
+                    TableBorderColor = theme?.Palette.TableBorderColor ?? Color.Empty,
+                    AlternatingRowBackground = theme?.Palette.AlternatingRowBackground ?? Color.Empty,
+                    MenuForeground = theme?.Palette.MenuForeground ?? Color.Empty,
+                    LabelForeground = theme?.Palette.LabelForeground ?? Color.Empty,
+                    EditableForeground = theme?.Palette.EditableForeground ?? Color.Empty
                 },
                 Semantics =
                 {
@@ -50,7 +56,13 @@ namespace Material_Editor.Theming
                     Palette.PanelBackground,
                     Palette.MenuBackground,
                     Palette.Foreground,
-                    Palette.Accent),
+                    Palette.Accent,
+                    Palette.BorderColor,
+                    Palette.TableBorderColor,
+                    Palette.AlternatingRowBackground,
+                    Palette.MenuForeground,
+                    Palette.LabelForeground,
+                    Palette.EditableForeground),
                 new ThemeSemanticColors(
                     Semantics.Success,
                     Semantics.Warning,
@@ -72,6 +84,12 @@ namespace Material_Editor.Theming
         public Color MenuBackground { get; set; }
         public Color Foreground { get; set; }
         public Color Accent { get; set; }
+        public Color BorderColor { get; set; }
+        public Color TableBorderColor { get; set; }
+        public Color AlternatingRowBackground { get; set; }
+        public Color MenuForeground { get; set; }
+        public Color LabelForeground { get; set; }
+        public Color EditableForeground { get; set; }
     }
 
     internal sealed class EditableThemeSemanticColors

@@ -22,8 +22,7 @@ namespace MaterialEditor.Tests
 
         private static void ThemeCatalog_LoadsValidXmlTheme()
         {
-            string directory = CreateTempDirectory();
-            try
+            TestFileSupport.RunInTempDirectory("material-editor-theme-tests", directory =>
             {
                 File.WriteAllText(Path.Combine(directory, "custom.xml"),
 @"<?xml version=""1.0"" encoding=""utf-8""?>
@@ -38,18 +37,17 @@ namespace MaterialEditor.Tests
                 AssertEqual("custom", result.Themes[0].Id, nameof(ThemeCatalog_LoadsValidXmlTheme));
                 AssertEqual("Custom Theme", result.Themes[0].DisplayName, nameof(ThemeCatalog_LoadsValidXmlTheme));
                 AssertEqual("#112233", ColorToHex(result.Themes[0].Palette.FormBackground), nameof(ThemeCatalog_LoadsValidXmlTheme));
+                AssertEqual("#667788", ColorToHex(result.Themes[0].Palette.BorderColor), nameof(ThemeCatalog_LoadsValidXmlTheme));
+                AssertEqual("#667788", ColorToHex(result.Themes[0].Palette.TableBorderColor), nameof(ThemeCatalog_LoadsValidXmlTheme));
+                AssertEqual("#354657", ColorToHex(result.Themes[0].Palette.AlternatingRowBackground), nameof(ThemeCatalog_LoadsValidXmlTheme));
+                AssertEqual("#556677", ColorToHex(result.Themes[0].Palette.MenuForeground), nameof(ThemeCatalog_LoadsValidXmlTheme));
                 AssertEqual("#304050", ColorToHex(result.Themes[0].Semantics.Error), nameof(ThemeCatalog_LoadsValidXmlTheme));
-            }
-            finally
-            {
-                DeleteDirectory(directory);
-            }
+            });
         }
 
         private static void ThemeCatalog_SkipsInvalidAndDuplicateThemes()
         {
-            string directory = CreateTempDirectory();
-            try
+            TestFileSupport.RunInTempDirectory("material-editor-theme-tests", directory =>
             {
                 File.WriteAllText(Path.Combine(directory, "valid.xml"),
 @"<?xml version=""1.0"" encoding=""utf-8""?>
@@ -76,26 +74,17 @@ namespace MaterialEditor.Tests
 
                 AssertEqual(1, result.Themes.Count, nameof(ThemeCatalog_SkipsInvalidAndDuplicateThemes));
                 AssertTrue(result.Warnings.Count >= 2, nameof(ThemeCatalog_SkipsInvalidAndDuplicateThemes));
-            }
-            finally
-            {
-                DeleteDirectory(directory);
-            }
+            });
         }
 
         private static void ThemeService_UsesFallbackThemeWhenDirectoryHasNoThemes()
         {
-            string directory = CreateTempDirectory();
-            try
+            TestFileSupport.RunInTempDirectory("material-editor-theme-tests", directory =>
             {
                 ThemeInitializationResult result = ThemeService.InitializeForTesting(string.Empty, directory);
 
                 AssertEqual(ThemeIds.WindowsDefault, result.ActiveTheme.Id, nameof(ThemeService_UsesFallbackThemeWhenDirectoryHasNoThemes));
-            }
-            finally
-            {
-                DeleteDirectory(directory);
-            }
+            });
         }
 
         private static void ThemeService_NormalizesLegacyThemeIds()
@@ -107,8 +96,7 @@ namespace MaterialEditor.Tests
 
         private static void ThemeService_FallsBackWhenSavedThemeIsMissing()
         {
-            string directory = CreateTempDirectory();
-            try
+            TestFileSupport.RunInTempDirectory("material-editor-theme-tests", directory =>
             {
                 File.WriteAllText(Path.Combine(directory, "default.xml"),
 @"<?xml version=""1.0"" encoding=""utf-8""?>
@@ -121,17 +109,12 @@ namespace MaterialEditor.Tests
 
                 AssertEqual(ThemeIds.Default, result.ActiveTheme.Id, nameof(ThemeService_FallsBackWhenSavedThemeIsMissing));
                 AssertTrue(!string.IsNullOrWhiteSpace(result.StartupWarning), nameof(ThemeService_FallsBackWhenSavedThemeIsMissing));
-            }
-            finally
-            {
-                DeleteDirectory(directory);
-            }
+            });
         }
 
         private static void ThemeCatalog_SavesThemeAndRoundTripsAccentEmpty()
         {
-            string directory = CreateTempDirectory();
-            try
+            TestFileSupport.RunInTempDirectory("material-editor-theme-tests", directory =>
             {
                 var theme = new ThemeDefinition(
                     "roundtrip",
@@ -142,7 +125,13 @@ namespace MaterialEditor.Tests
                         Color.FromArgb(0x33, 0x44, 0x55),
                         Color.FromArgb(0x44, 0x55, 0x66),
                         Color.FromArgb(0xEE, 0xEE, 0xEE),
-                        Color.Empty),
+                        Color.Empty,
+                        Color.FromArgb(0x99, 0xAA, 0xBB),
+                        Color.FromArgb(0x88, 0x77, 0x66),
+                        Color.FromArgb(0x44, 0x66, 0x88),
+                        Color.FromArgb(0xCC, 0xDD, 0xEE),
+                        Color.FromArgb(0x12, 0x34, 0x56),
+                        Color.FromArgb(0x65, 0x43, 0x21)),
                     new ThemeSemanticColors(
                         Color.FromArgb(0x10, 0x20, 0x30),
                         Color.FromArgb(0x20, 0x30, 0x40),
@@ -159,21 +148,22 @@ namespace MaterialEditor.Tests
                 ThemeCatalogLoadResult result = ThemeCatalog.LoadFromDirectory(directory);
 
                 AssertTrue(xml.Contains("accent=\"empty\"", StringComparison.OrdinalIgnoreCase), nameof(ThemeCatalog_SavesThemeAndRoundTripsAccentEmpty));
+                AssertTrue(xml.Contains("borderColor=\"#99AABB\"", StringComparison.OrdinalIgnoreCase), nameof(ThemeCatalog_SavesThemeAndRoundTripsAccentEmpty));
+                AssertTrue(xml.Contains("tableBorderColor=\"#887766\"", StringComparison.OrdinalIgnoreCase), nameof(ThemeCatalog_SavesThemeAndRoundTripsAccentEmpty));
+                AssertTrue(xml.Contains("alternatingRowBackground=\"#446688\"", StringComparison.OrdinalIgnoreCase), nameof(ThemeCatalog_SavesThemeAndRoundTripsAccentEmpty));
                 AssertEqual(1, result.Themes.Count, nameof(ThemeCatalog_SavesThemeAndRoundTripsAccentEmpty));
                 AssertEqual("roundtrip", result.Themes[0].Id, nameof(ThemeCatalog_SavesThemeAndRoundTripsAccentEmpty));
                 AssertEqual(true, result.Themes[0].Palette.Accent.IsEmpty, nameof(ThemeCatalog_SavesThemeAndRoundTripsAccentEmpty));
+                AssertEqual("#99AABB", ColorToHex(result.Themes[0].Palette.BorderColor), nameof(ThemeCatalog_SavesThemeAndRoundTripsAccentEmpty));
+                AssertEqual("#887766", ColorToHex(result.Themes[0].Palette.TableBorderColor), nameof(ThemeCatalog_SavesThemeAndRoundTripsAccentEmpty));
+                AssertEqual("#446688", ColorToHex(result.Themes[0].Palette.AlternatingRowBackground), nameof(ThemeCatalog_SavesThemeAndRoundTripsAccentEmpty));
                 AssertEqual("#304050", ColorToHex(result.Themes[0].Semantics.Error), nameof(ThemeCatalog_SavesThemeAndRoundTripsAccentEmpty));
-            }
-            finally
-            {
-                DeleteDirectory(directory);
-            }
+            });
         }
 
         private static void ThemeService_ReloadThemesForTestingMakesSavedThemeAvailable()
         {
-            string directory = CreateTempDirectory();
-            try
+            TestFileSupport.RunInTempDirectory("material-editor-theme-tests", directory =>
             {
                 File.WriteAllText(Path.Combine(directory, "default.xml"),
 @"<?xml version=""1.0"" encoding=""utf-8""?>
@@ -188,7 +178,7 @@ namespace MaterialEditor.Tests
                     new ThemeDefinition(
                         "custom",
                         "Custom Theme",
-                        new ThemePalette(Color.Black, Color.Black, Color.Black, Color.Black, Color.White, Color.Empty),
+                        new ThemePalette(Color.Black, Color.Black, Color.Black, Color.Black, Color.White, Color.Empty, Color.White, Color.White, Color.Black, Color.White, Color.White, Color.White),
                         new ThemeSemanticColors(Color.Green, Color.Yellow, Color.Red, Color.Blue, Color.Gray, Color.Maroon, Color.Orange, Color.Purple, Color.Silver)),
                     directory);
 
@@ -196,19 +186,15 @@ namespace MaterialEditor.Tests
 
                 AssertEqual(true, ThemeService.AvailableThemes.Any(theme => string.Equals(theme.Id, "custom", StringComparison.OrdinalIgnoreCase)), nameof(ThemeService_ReloadThemesForTestingMakesSavedThemeAvailable));
                 AssertEqual("default", ThemeService.CurrentTheme.Id, nameof(ThemeService_ReloadThemesForTestingMakesSavedThemeAvailable));
-            }
-            finally
-            {
-                DeleteDirectory(directory);
-            }
+            });
         }
 
         private static void ThemeEditorValidator_RejectsInvalidThemeDefinitions()
         {
             var availableThemes = new[]
             {
-                new ThemeDefinition("default", "Default", new ThemePalette(Color.Black, Color.Black, Color.Black, Color.Black, Color.White, Color.Empty), new ThemeSemanticColors(Color.Green, Color.Yellow, Color.Red, Color.Blue, Color.Gray, Color.Maroon, Color.Orange, Color.Purple, Color.Silver)),
-                new ThemeDefinition("custom", "Custom", new ThemePalette(Color.Black, Color.Black, Color.Black, Color.Black, Color.White, Color.Empty), new ThemeSemanticColors(Color.Green, Color.Yellow, Color.Red, Color.Blue, Color.Gray, Color.Maroon, Color.Orange, Color.Purple, Color.Silver))
+                new ThemeDefinition("default", "Default", new ThemePalette(Color.Black, Color.Black, Color.Black, Color.Black, Color.White, Color.Empty, Color.White, Color.White, Color.Black, Color.White, Color.White, Color.White), new ThemeSemanticColors(Color.Green, Color.Yellow, Color.Red, Color.Blue, Color.Gray, Color.Maroon, Color.Orange, Color.Purple, Color.Silver)),
+                new ThemeDefinition("custom", "Custom", new ThemePalette(Color.Black, Color.Black, Color.Black, Color.Black, Color.White, Color.Empty, Color.White, Color.White, Color.Black, Color.White, Color.White, Color.White), new ThemeSemanticColors(Color.Green, Color.Yellow, Color.Red, Color.Blue, Color.Gray, Color.Maroon, Color.Orange, Color.Purple, Color.Silver))
             };
 
             var blankId = new EditableThemeDefinition { DisplayName = "Blank" };
@@ -225,21 +211,6 @@ namespace MaterialEditor.Tests
         private static string ColorToHex(System.Drawing.Color color)
         {
             return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
-        }
-
-        private static string CreateTempDirectory()
-        {
-            string directory = Path.Combine(Path.GetTempPath(), "material-editor-theme-tests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(directory);
-            return directory;
-        }
-
-        private static void DeleteDirectory(string directory)
-        {
-            if (!Directory.Exists(directory))
-                return;
-
-            Directory.Delete(directory, recursive: true);
         }
 
         private static void AssertTrue(bool condition, string testName)
