@@ -198,3 +198,7 @@ When updating `AGENTS.md` in the future:
 - keep repo-wide guidance intact
 - add or revise major current initiatives only as a section of the file
 - avoid turning the whole document into a single-task brief
+
+
+Important Note:
+verification commands in parallel, the test-project build hit the expected CS2012 file-lock on obj\...\bgem.dll. Sequential verification is clean and remains the right way to validate this repo.
