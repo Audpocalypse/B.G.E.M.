@@ -1,8 +1,12 @@
 using MaterialLib;
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.Serialization.Json;
 using System.Text;
+using System.Threading;
 
 namespace Material_Editor.Services
 {
@@ -57,19 +61,76 @@ namespace Material_Editor.Services
             }
         }
 
+        public static bool TrySaveMaterial(string filePath, BaseMaterialFile material, bool asJson, out string errorMessage)
+        {
+            errorMessage = null;
+            var previousCulture = Thread.CurrentThread.CurrentCulture;
+
+            try
+            {
+                EnsureParentDirectoryExists(filePath);
+                using var stream = new FileStream(filePath, FileMode.Create, FileAccess.Write);
+                if (asJson)
+                {
+                    Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
+                    using var writer = JsonReaderWriterFactory.CreateJsonWriter(stream, Encoding.UTF8, true, true, "  ");
+                    var serializer = new DataContractJsonSerializer(material.GetType(), new DataContractJsonSerializerSettings { UseSimpleDictionaryFormat = true });
+                    serializer.WriteObject(writer, material);
+                    writer.Flush();
+                }
+                else if (!material.Save(stream))
+                {
+                    errorMessage = "Failed to write binary material.";
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = ex.Message;
+                return false;
+            }
+            finally
+            {
+                Thread.CurrentThread.CurrentCulture = previousCulture;
+            }
+        }
+
         public static void SaveMaterial(string filePath, BaseMaterialFile material, bool asJson)
         {
-            using var stream = new FileStream(filePath, FileMode.Create, FileAccess.Write);
-            if (asJson)
+            if (!TrySaveMaterial(filePath, material, asJson, out string errorMessage))
+                throw new IOException(errorMessage ?? "Failed to save material.");
+        }
+
+        public static void SaveMaterial(string filePath, BaseMaterialFile material, bool asJson, bool backupExisting)
+        {
+            if (backupExisting && File.Exists(filePath))
+                File.Copy(filePath, $"{filePath}.bak", true);
+
+            EnsureParentDirectoryExists(filePath);
+            SaveMaterial(filePath, material, asJson);
+        }
+
+        public static FieldCopyResult SaveMaterialResult(
+            string filePath,
+            BaseMaterialFile material,
+            bool asJson,
+            string successMessage,
+            bool backupExisting = false,
+            string failureMessagePrefix = null)
+        {
+            try
             {
-                using var writer = JsonReaderWriterFactory.CreateJsonWriter(stream, Encoding.UTF8, true, true, "  ");
-                var serializer = new DataContractJsonSerializer(material.GetType(), new DataContractJsonSerializerSettings { UseSimpleDictionaryFormat = true });
-                serializer.WriteObject(writer, material);
-                writer.Flush();
+                SaveMaterial(filePath, material, asJson, backupExisting);
+                return new FieldCopyResult(filePath, FieldCopyStatus.Success, successMessage);
             }
-            else if (!material.Save(stream))
+            catch (Exception ex)
             {
-                throw new IOException("Failed to write binary material.");
+                string message = string.IsNullOrEmpty(failureMessagePrefix)
+                    ? ex.Message
+                    : $"{failureMessagePrefix}{ex.Message}";
+                return new FieldCopyResult(filePath, FieldCopyStatus.Failed, message);
             }
         }
 
@@ -86,6 +147,96 @@ namespace Material_Editor.Services
             {
                 return path.Trim();
             }
+        }
+
+        public static bool TryNormalizeOutputPath(string path, out string normalizedPath, out string errorMessage)
+        {
+            normalizedPath = string.Empty;
+            errorMessage = ValidateOutputPath(path);
+            if (!string.IsNullOrEmpty(errorMessage))
+                return false;
+
+            try
+            {
+                normalizedPath = Path.GetFullPath(path.Trim());
+                return true;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Invalid output path: {ex.Message}";
+                return false;
+            }
+        }
+
+        public static void FinalizeOutputPaths<TItem>(
+            IEnumerable<TItem> items,
+            Func<TItem, string> targetPathSelector,
+            Func<TItem, string> validationErrorSelector,
+            Action<TItem, string> normalizedPathSetter,
+            Action<TItem, string> validationErrorSetter,
+            Func<TItem, string> normalizedPathSelector,
+            string duplicateMessage)
+        {
+            foreach (TItem item in items ?? Array.Empty<TItem>())
+            {
+                if (!string.IsNullOrWhiteSpace(validationErrorSelector(item)))
+                    continue;
+
+                if (!TryNormalizeOutputPath(targetPathSelector(item), out string normalizedPath, out string errorMessage))
+                {
+                    validationErrorSetter(item, errorMessage);
+                    continue;
+                }
+
+                normalizedPathSetter(item, normalizedPath);
+            }
+
+            var duplicateGroups = (items ?? Array.Empty<TItem>())
+                .Where(item => string.IsNullOrWhiteSpace(validationErrorSelector(item)))
+                .GroupBy(normalizedPathSelector, StringComparer.OrdinalIgnoreCase)
+                .Where(group => !string.IsNullOrWhiteSpace(group.Key) && group.Count() > 1);
+
+            foreach (IGrouping<string, TItem> duplicateGroup in duplicateGroups)
+            {
+                foreach (TItem item in duplicateGroup)
+                    validationErrorSetter(item, duplicateMessage);
+            }
+        }
+
+        public static string ValidateOutputPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return "Output path resolved to an empty value.";
+
+            string fileName = Path.GetFileName(path);
+            if (string.IsNullOrWhiteSpace(fileName))
+                return "Generated output path is missing a file name.";
+
+            if (fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                return $"Generated file name '{fileName}' contains invalid characters.";
+
+            string directory = Path.GetDirectoryName(path);
+            if (string.IsNullOrWhiteSpace(directory))
+                return null;
+
+            char[] separators = new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+            foreach (string segment in directory.Split(separators, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (segment.EndsWith(":", StringComparison.Ordinal))
+                    continue;
+
+                if (segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                    return $"Generated directory segment '{segment}' contains invalid characters.";
+            }
+
+            return null;
+        }
+
+        private static void EnsureParentDirectoryExists(string filePath)
+        {
+            string directory = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrWhiteSpace(directory))
+                Directory.CreateDirectory(directory);
         }
     }
 }

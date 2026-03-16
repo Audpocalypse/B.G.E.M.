@@ -6,27 +6,6 @@ using System.Linq;
 
 namespace Material_Editor.Services
 {
-    public enum FieldCopyStatus
-    {
-        Success,
-        Skipped,
-        Failed
-    }
-
-    public sealed class FieldCopyResult
-    {
-        public string TargetPath { get; }
-        public FieldCopyStatus Status { get; }
-        public string Message { get; }
-
-        public FieldCopyResult(string targetPath, FieldCopyStatus status, string message)
-        {
-            TargetPath = targetPath;
-            Status = status;
-            Message = message;
-        }
-    }
-
     public sealed class FieldOverwriteTool
     {
         public IReadOnlyList<FieldCopyResult> Run(BaseMaterialFile sourceState, IReadOnlyList<MaterialFieldDescriptor> descriptors, IReadOnlyList<string> targetFiles, bool backupBeforeWrite)
@@ -91,39 +70,13 @@ namespace Material_Editor.Services
 
         private FieldCopyResult ProcessTarget(BaseMaterialFile sourceState, IReadOnlyList<MaterialFieldDescriptor> descriptors, string filePath, bool backupBeforeWrite)
         {
-            if (!File.Exists(filePath))
-                return new FieldCopyResult(filePath, FieldCopyStatus.Failed, "Target file does not exist.");
-
-            if (!MaterialFilePersistence.TryLoadMaterial(filePath, out var targetMaterial, out var isJson, out var loadError))
-                return new FieldCopyResult(filePath, FieldCopyStatus.Failed, loadError ?? "Failed to load material.");
-
-            if (targetMaterial.GetType() != sourceState.GetType())
-                return new FieldCopyResult(filePath, FieldCopyStatus.Skipped, "Skipped incompatible material type.");
-
-            var supportedDescriptors = descriptors.Where(d => d.IsSupported(targetMaterial)).ToList();
-            if (supportedDescriptors.Count == 0)
-                return new FieldCopyResult(filePath, FieldCopyStatus.Skipped, "No compatible fields for target version.");
+            if (!TryPrepareTargetMaterial(sourceState, descriptors, filePath, out BaseMaterialFile targetMaterial, out bool isJson, out IReadOnlyList<MaterialFieldDescriptor> supportedDescriptors, out FieldCopyResult failureResult))
+                return failureResult;
 
             foreach (var descriptor in supportedDescriptors)
-            {
                 descriptor.SetValue(targetMaterial, descriptor.GetValue(sourceState));
-            }
 
-            try
-            {
-                if (backupBeforeWrite)
-                {
-                    File.Copy(filePath, $"{filePath}.bak", true);
-                }
-
-                MaterialFilePersistence.SaveMaterial(filePath, targetMaterial, isJson);
-            }
-            catch (Exception ex)
-            {
-                return new FieldCopyResult(filePath, FieldCopyStatus.Failed, ex.Message);
-            }
-
-            return new FieldCopyResult(filePath, FieldCopyStatus.Success, "Updated successfully.");
+            return SaveTargetMaterial(filePath, targetMaterial, isJson, backupBeforeWrite);
         }
 
         private FieldCopyResult ProcessTargetIterative(
@@ -135,18 +88,8 @@ namespace Material_Editor.Services
             bool backupBeforeWrite)
         {
             string filePath = context.TargetPath;
-            if (!File.Exists(filePath))
-                return new FieldCopyResult(filePath, FieldCopyStatus.Failed, "Target file does not exist.");
-
-            if (!MaterialFilePersistence.TryLoadMaterial(filePath, out var targetMaterial, out var isJson, out var loadError))
-                return new FieldCopyResult(filePath, FieldCopyStatus.Failed, loadError ?? "Failed to load material.");
-
-            if (targetMaterial.GetType() != sourceState.GetType())
-                return new FieldCopyResult(filePath, FieldCopyStatus.Skipped, "Skipped incompatible material type.");
-
-            var supportedDescriptors = descriptors.Where(d => d.IsSupported(targetMaterial)).ToList();
-            if (supportedDescriptors.Count == 0)
-                return new FieldCopyResult(filePath, FieldCopyStatus.Skipped, "No compatible fields for target version.");
+            if (!TryPrepareTargetMaterial(sourceState, descriptors, filePath, out BaseMaterialFile targetMaterial, out bool isJson, out IReadOnlyList<MaterialFieldDescriptor> supportedDescriptors, out FieldCopyResult failureResult))
+                return failureResult;
 
             foreach (var descriptor in supportedDescriptors)
             {
@@ -180,19 +123,7 @@ namespace Material_Editor.Services
                 }
             }
 
-            try
-            {
-                if (backupBeforeWrite)
-                    File.Copy(filePath, $"{filePath}.bak", true);
-
-                MaterialFilePersistence.SaveMaterial(filePath, targetMaterial, isJson);
-            }
-            catch (Exception ex)
-            {
-                return new FieldCopyResult(filePath, FieldCopyStatus.Failed, ex.Message);
-            }
-
-            return new FieldCopyResult(filePath, FieldCopyStatus.Success, "Updated successfully.");
+            return SaveTargetMaterial(filePath, targetMaterial, isJson, backupBeforeWrite);
         }
 
         private static object ConvertOverrideValue(MaterialFieldDescriptor descriptor, BaseMaterialFile targetMaterial, string overrideValue)
@@ -201,6 +132,62 @@ namespace Material_Editor.Services
                 return parsedValue;
 
             throw new FormatException(errorMessage ?? $"Failed to parse field '{descriptor.Label}'.");
+        }
+
+        private static bool TryPrepareTargetMaterial(
+            BaseMaterialFile sourceState,
+            IReadOnlyList<MaterialFieldDescriptor> descriptors,
+            string filePath,
+            out BaseMaterialFile targetMaterial,
+            out bool isJson,
+            out IReadOnlyList<MaterialFieldDescriptor> supportedDescriptors,
+            out FieldCopyResult failureResult)
+        {
+            targetMaterial = null;
+            isJson = false;
+            supportedDescriptors = Array.Empty<MaterialFieldDescriptor>();
+            failureResult = null;
+
+            if (!File.Exists(filePath))
+            {
+                failureResult = new FieldCopyResult(filePath, FieldCopyStatus.Failed, "Target file does not exist.");
+                return false;
+            }
+
+            if (!MaterialFilePersistence.TryLoadMaterial(filePath, out BaseMaterialFile loadedMaterial, out isJson, out string loadError))
+            {
+                failureResult = new FieldCopyResult(filePath, FieldCopyStatus.Failed, loadError ?? "Failed to load material.");
+                return false;
+            }
+
+            targetMaterial = loadedMaterial;
+            if (targetMaterial.GetType() != sourceState.GetType())
+            {
+                failureResult = new FieldCopyResult(filePath, FieldCopyStatus.Skipped, "Skipped incompatible material type.");
+                return false;
+            }
+
+            BaseMaterialFile preparedMaterial = targetMaterial;
+            supportedDescriptors = (descriptors ?? Array.Empty<MaterialFieldDescriptor>())
+                .Where(descriptor => descriptor.IsSupported(preparedMaterial))
+                .ToArray();
+            if (supportedDescriptors.Count == 0)
+            {
+                failureResult = new FieldCopyResult(filePath, FieldCopyStatus.Skipped, "No compatible fields for target version.");
+                return false;
+            }
+
+            return true;
+        }
+
+        private static FieldCopyResult SaveTargetMaterial(string filePath, BaseMaterialFile targetMaterial, bool isJson, bool backupBeforeWrite)
+        {
+            return MaterialFilePersistence.SaveMaterialResult(
+                filePath,
+                targetMaterial,
+                isJson,
+                "Updated successfully.",
+                backupBeforeWrite);
         }
     }
 }

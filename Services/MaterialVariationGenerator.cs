@@ -4,8 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.Serialization.Json;
-using System.Text;
 
 namespace Material_Editor.Services
 {
@@ -53,7 +51,12 @@ namespace Material_Editor.Services
             return ExecuteGeneration(template, options, serializeAsJson, workItems);
         }
 
-        public static string FormatWithIndex(string pattern, int index)
+        public static string NormalizeLegacyOutputPatternForAdvancedMode(string pattern)
+        {
+            return MaterialVariationTokenExpander.ReplaceLegacyIndexPlaceholders(pattern, "{indexNN}");
+        }
+
+        private static string FormatWithIndex(string pattern, int index)
         {
             if (!ContainsIndexPlaceholder(pattern))
                 throw new FormatException("Pattern must include an {index} placeholder.");
@@ -212,35 +215,14 @@ namespace Material_Editor.Services
 
         private static void FinalizeWorkItems(IReadOnlyList<VariationWorkItem> workItems)
         {
-            foreach (var workItem in workItems.Where(item => string.IsNullOrEmpty(item.ValidationError)))
-            {
-                string validationError = ValidateGeneratedPath(workItem.TargetPath);
-                if (!string.IsNullOrEmpty(validationError))
-                {
-                    workItem.ValidationError = validationError;
-                    continue;
-                }
-
-                try
-                {
-                    workItem.NormalizedPath = Path.GetFullPath(workItem.TargetPath);
-                }
-                catch (Exception ex)
-                {
-                    workItem.ValidationError = $"Invalid target path: {ex.Message}";
-                }
-            }
-
-            var duplicateGroups = workItems
-                .Where(item => string.IsNullOrEmpty(item.ValidationError) && !string.IsNullOrEmpty(item.NormalizedPath))
-                .GroupBy(item => item.NormalizedPath, StringComparer.OrdinalIgnoreCase)
-                .Where(group => group.Count() > 1);
-
-            foreach (var duplicateGroup in duplicateGroups)
-            {
-                foreach (var item in duplicateGroup)
-                    item.ValidationError = "Duplicate target path; skipping.";
-            }
+            MaterialFilePersistence.FinalizeOutputPaths(
+                workItems,
+                item => item.TargetPath,
+                item => item.ValidationError,
+                (item, normalizedPath) => item.NormalizedPath = normalizedPath,
+                (item, error) => item.ValidationError = error,
+                item => item.NormalizedPath,
+                "Duplicate target path; skipping.");
         }
 
         private static IReadOnlyList<FieldCopyResult> ExecuteGeneration(
@@ -285,69 +267,15 @@ namespace Material_Editor.Services
                 if (clone == null)
                     continue;
 
-                try
-                {
-                    var directory = Path.GetDirectoryName(workItem.NormalizedPath);
-                    if (!string.IsNullOrEmpty(directory))
-                        Directory.CreateDirectory(directory);
-
-                    SaveMaterial(workItem.NormalizedPath, clone, serializeAsJson);
-                }
-                catch (Exception ex)
-                {
-                    results.Add(new FieldCopyResult(workItem.NormalizedPath, FieldCopyStatus.Failed, $"Failed to save material: {ex.Message}"));
-                    continue;
-                }
-
-                results.Add(new FieldCopyResult(workItem.NormalizedPath, FieldCopyStatus.Success, "Variation generated successfully."));
+                results.Add(MaterialFilePersistence.SaveMaterialResult(
+                    workItem.NormalizedPath,
+                    clone,
+                    serializeAsJson,
+                    "Variation generated successfully.",
+                    failureMessagePrefix: "Failed to save material: "));
             }
 
             return results;
-        }
-
-        private static void SaveMaterial(string filePath, BaseMaterialFile material, bool serializeAsJson)
-        {
-            using var stream = new FileStream(filePath, FileMode.Create, FileAccess.Write);
-            if (serializeAsJson)
-            {
-                using var writer = JsonReaderWriterFactory.CreateJsonWriter(stream, Encoding.UTF8, true, true, "  ");
-                var serializer = new DataContractJsonSerializer(material.GetType(), new DataContractJsonSerializerSettings { UseSimpleDictionaryFormat = true });
-                serializer.WriteObject(writer, material);
-                writer.Flush();
-                return;
-            }
-
-            if (!material.Save(stream))
-                throw new IOException("Failed to write binary material.");
-        }
-
-        private static string ValidateGeneratedPath(string targetPath)
-        {
-            if (string.IsNullOrWhiteSpace(targetPath))
-                return "Output path resolved to an empty value.";
-
-            string fileName = Path.GetFileName(targetPath);
-            if (string.IsNullOrWhiteSpace(fileName))
-                return "Generated output path is missing a file name.";
-
-            if (fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-                return $"Generated file name '{fileName}' contains invalid characters.";
-
-            string directory = Path.GetDirectoryName(targetPath);
-            if (string.IsNullOrWhiteSpace(directory))
-                return null;
-
-            char[] separators = new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
-            foreach (var segment in directory.Split(separators, StringSplitOptions.RemoveEmptyEntries))
-            {
-                if (segment.EndsWith(":", StringComparison.Ordinal))
-                    continue;
-
-                if (segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-                    return $"Generated directory segment '{segment}' contains invalid characters.";
-            }
-
-            return null;
         }
 
         private sealed class VariationWorkItem

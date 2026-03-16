@@ -13,6 +13,7 @@ namespace Material_Editor.Dialogs
         private readonly ComboBox themeComboBox;
         private readonly TextBox fontPreviewTextBox;
         private readonly ComboBox bulkRemoveBehaviorComboBox;
+        private readonly CheckBox showSplashAnimationCheckBox;
         private readonly Panel contentPanel;
         private readonly TableLayoutPanel contentLayout;
         private readonly Button designThemeButton;
@@ -38,6 +39,7 @@ namespace Material_Editor.Dialogs
             SelectedThemeId = string.IsNullOrWhiteSpace(config.ThemeId)
                 ? AppearanceService.CurrentAppearance.Theme.Id
                 : ThemeService.NormalizeThemeId(config.ThemeId);
+            SelectedShowSplashAnimation = config.ShowSplashAnimation;
             SelectedBulkDirtyRemoveBehavior = config.BulkDirtyRemoveBehavior;
 
             var mainLayout = new TableLayoutPanel
@@ -160,7 +162,8 @@ namespace Material_Editor.Dialogs
             contentLayout.Controls.Add(optionsGroup, 0, 1);
 
             var optionsLayout = CreateInnerLayout();
-            optionsLayout.RowCount = 1;
+            optionsLayout.RowCount = 2;
+            optionsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             optionsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             optionsGroup.Controls.Add(optionsLayout);
 
@@ -175,6 +178,16 @@ namespace Material_Editor.Dialogs
             bulkRemoveBehaviorComboBox.Items.Add(BulkDirtyRemoveBehavior.Discard);
             bulkRemoveBehaviorComboBox.SelectedItem = SelectedBulkDirtyRemoveBehavior;
             optionsLayout.Controls.Add(bulkRemoveBehaviorComboBox, 1, 0);
+
+            showSplashAnimationCheckBox = new CheckBox
+            {
+                Text = "Show splash animation on startup",
+                AutoSize = true,
+                Checked = SelectedShowSplashAnimation,
+                Margin = new Padding(0, 8, 0, 0)
+            };
+            optionsLayout.Controls.Add(showSplashAnimationCheckBox, 0, 1);
+            optionsLayout.SetColumnSpan(showSplashAnimationCheckBox, 2);
 
             var footerLayout = new FlowLayoutPanel
             {
@@ -202,7 +215,19 @@ namespace Material_Editor.Dialogs
 
         public string SelectedThemeId { get; private set; }
         public Font SelectedFont => selectedFont;
+        public bool SelectedShowSplashAnimation { get; private set; }
         public BulkDirtyRemoveBehavior SelectedBulkDirtyRemoveBehavior { get; private set; }
+
+        internal bool SplashAnimationChecked
+        {
+            get => showSplashAnimationCheckBox.Checked;
+            set => showSplashAnimationCheckBox.Checked = value;
+        }
+
+        internal void CommitSelections()
+        {
+            OkButton_Click(this, EventArgs.Empty);
+        }
 
         protected override void ApplyAppearance(AppearanceDefinition appearance)
         {
@@ -286,6 +311,8 @@ namespace Material_Editor.Dialogs
         {
             if (themeComboBox.SelectedItem is ThemeChoice choice)
                 SelectedThemeId = choice.Theme.Id;
+
+            SelectedShowSplashAnimation = showSplashAnimationCheckBox.Checked;
 
             if (bulkRemoveBehaviorComboBox.SelectedItem is BulkDirtyRemoveBehavior behavior)
                 SelectedBulkDirtyRemoveBehavior = behavior;

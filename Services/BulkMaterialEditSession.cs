@@ -74,11 +74,6 @@ namespace Material_Editor.Services
             }
         }
 
-        public void ClearError()
-        {
-            ErrorMessage = null;
-        }
-
         private object ParseInputValue(object inputValue)
         {
             if (Descriptor.EditorKind == BulkFieldEditorKind.Boolean)
@@ -347,19 +342,18 @@ namespace Material_Editor.Services
                     continue;
                 }
 
-                try
+                FieldCopyResult saveResult = MaterialFilePersistence.SaveMaterialResult(
+                    row.FilePath,
+                    row.Material,
+                    row.IsJson,
+                    "Updated successfully.",
+                    backupBeforeWrite);
+                if (saveResult.Status == FieldCopyStatus.Success)
                 {
-                    if (backupBeforeWrite)
-                        System.IO.File.Copy(row.FilePath, $"{row.FilePath}.bak", true);
-
-                    MaterialFilePersistence.SaveMaterial(row.FilePath, row.Material, row.IsJson);
                     row.AcceptChanges();
-                    results.Add(new FieldCopyResult(row.FilePath, FieldCopyStatus.Success, "Updated successfully."));
                 }
-                catch (Exception ex)
-                {
-                    results.Add(new FieldCopyResult(row.FilePath, FieldCopyStatus.Failed, ex.Message));
-                }
+
+                results.Add(saveResult);
             }
 
             return results;

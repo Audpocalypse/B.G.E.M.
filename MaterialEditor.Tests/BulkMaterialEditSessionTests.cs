@@ -37,32 +37,38 @@ namespace MaterialEditor.Tests
 
         private static void Session_SortsDistinctRowsAndFlagsMixedTypes()
         {
-            string outputDirectory = CreateTempDirectory();
-            try
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string outputPath = outputDirectory.Path;
+            string aPath = TestFileSupport.CreateBgsm(outputPath, "b.bgsm", material =>
             {
-                string aPath = CreateBgsm(outputDirectory, "b.bgsm", version: 2, diffuseTexture: "textures\\a.dds");
-                string bPath = CreateBgsm(outputDirectory, "a.bgsm", version: 2, diffuseTexture: "textures\\b.dds");
-                string wrongPath = CreateBgem(outputDirectory, "wrong.bgem", version: 11, baseTexture: "textures\\wrong.dds");
-
-                var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { aPath, wrongPath, bPath, aPath });
-
-                AssertSequenceEqual(
-                    new[]
-                    {
-                        MaterialFilePersistence.NormalizePath(bPath),
-                        MaterialFilePersistence.NormalizePath(aPath),
-                        MaterialFilePersistence.NormalizePath(wrongPath)
-                    },
-                    session.Rows.Select(row => row.FilePath).ToArray(),
-                    nameof(Session_SortsDistinctRowsAndFlagsMixedTypes));
-
-                AssertTrue(!session.Rows[0].HasLoadError, nameof(Session_SortsDistinctRowsAndFlagsMixedTypes));
-                AssertTrue(session.Rows[2].HasLoadError, nameof(Session_SortsDistinctRowsAndFlagsMixedTypes));
-            }
-            finally
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\a.dds";
+            });
+            string bPath = TestFileSupport.CreateBgsm(outputPath, "a.bgsm", material =>
             {
-                DeleteDirectory(outputDirectory);
-            }
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\b.dds";
+            });
+            string wrongPath = TestFileSupport.CreateBgem(outputPath, "wrong.bgem", material =>
+            {
+                material.Version = 11;
+                material.BaseTexture = "textures\\wrong.dds";
+            });
+
+            var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { aPath, wrongPath, bPath, aPath });
+
+            AssertSequenceEqual(
+                new[]
+                {
+                    MaterialFilePersistence.NormalizePath(bPath),
+                    MaterialFilePersistence.NormalizePath(aPath),
+                    MaterialFilePersistence.NormalizePath(wrongPath)
+                },
+                session.Rows.Select(row => row.FilePath).ToArray(),
+                nameof(Session_SortsDistinctRowsAndFlagsMixedTypes));
+
+            AssertTrue(!session.Rows[0].HasLoadError, nameof(Session_SortsDistinctRowsAndFlagsMixedTypes));
+            AssertTrue(session.Rows[2].HasLoadError, nameof(Session_SortsDistinctRowsAndFlagsMixedTypes));
         }
 
         private static void Descriptor_ParsesAndFormatsSpecialTypes()
@@ -87,150 +93,156 @@ namespace MaterialEditor.Tests
 
         private static void Session_TracksUnsupportedVersionSpecificFields()
         {
-            string outputDirectory = CreateTempDirectory();
-            try
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string outputPath = outputDirectory.Path;
+            string oldPath = TestFileSupport.CreateBgsm(outputPath, "old.bgsm", material =>
             {
-                string oldPath = CreateBgsm(outputDirectory, "old.bgsm", version: 2, diffuseTexture: "textures\\old.dds");
-                string newPath = CreateBgsm(outputDirectory, "new.bgsm", version: 13, diffuseTexture: "textures\\new.dds");
-
-                var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { oldPath, newPath });
-                var lumDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.LumEmittance);
-                var oldRow = session.Rows.Single(row => row.FilePath == MaterialFilePersistence.NormalizePath(oldPath));
-                var newRow = session.Rows.Single(row => row.FilePath == MaterialFilePersistence.NormalizePath(newPath));
-
-                AssertEqual(false, oldRow.GetCell(lumDescriptor).IsSupported, nameof(Session_TracksUnsupportedVersionSpecificFields));
-                AssertEqual(true, newRow.GetCell(lumDescriptor).IsSupported, nameof(Session_TracksUnsupportedVersionSpecificFields));
-            }
-            finally
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\old.dds";
+            });
+            string newPath = TestFileSupport.CreateBgsm(outputPath, "new.bgsm", material =>
             {
-                DeleteDirectory(outputDirectory);
-            }
+                material.Version = 13;
+                material.DiffuseTexture = "textures\\new.dds";
+            });
+
+            var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { oldPath, newPath });
+            var lumDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.LumEmittance);
+            var oldRow = session.Rows.Single(row => row.FilePath == MaterialFilePersistence.NormalizePath(oldPath));
+            var newRow = session.Rows.Single(row => row.FilePath == MaterialFilePersistence.NormalizePath(newPath));
+
+            AssertEqual(false, oldRow.GetCell(lumDescriptor).IsSupported, nameof(Session_TracksUnsupportedVersionSpecificFields));
+            AssertEqual(true, newRow.GetCell(lumDescriptor).IsSupported, nameof(Session_TracksUnsupportedVersionSpecificFields));
         }
 
         private static void Session_TracksDirtyStateForParentBooleanFields()
         {
-            string outputDirectory = CreateTempDirectory();
-            try
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string path = TestFileSupport.CreateBgsm(outputDirectory.Path, "env.bgsm", material =>
             {
-                string path = CreateBgsm(outputDirectory, "env.bgsm", version: 2, diffuseTexture: "textures\\env.dds");
-                var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { path });
-                var row = session.Rows.Single();
-                var descriptor = session.AllDescriptors.Single(field => field.Label == ControlNames.EnvironmentMapping);
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\env.dds";
+            });
+            var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { path });
+            var row = session.Rows.Single();
+            var descriptor = session.AllDescriptors.Single(field => field.Label == ControlNames.EnvironmentMapping);
 
-                AssertEqual(false, row.IsDirty, nameof(Session_TracksDirtyStateForParentBooleanFields));
-                AssertTrue(session.TrySetCellValue(row, descriptor, true, out string errorMessage), nameof(Session_TracksDirtyStateForParentBooleanFields));
-                AssertEqual(string.Empty, errorMessage ?? string.Empty, nameof(Session_TracksDirtyStateForParentBooleanFields));
-                AssertEqual(true, row.GetCell(descriptor).CurrentValue, nameof(Session_TracksDirtyStateForParentBooleanFields));
-                AssertTrue(row.IsDirty, nameof(Session_TracksDirtyStateForParentBooleanFields));
-            }
-            finally
-            {
-                DeleteDirectory(outputDirectory);
-            }
+            AssertEqual(false, row.IsDirty, nameof(Session_TracksDirtyStateForParentBooleanFields));
+            AssertTrue(session.TrySetCellValue(row, descriptor, true, out string errorMessage), nameof(Session_TracksDirtyStateForParentBooleanFields));
+            AssertEqual(string.Empty, errorMessage ?? string.Empty, nameof(Session_TracksDirtyStateForParentBooleanFields));
+            AssertEqual(true, row.GetCell(descriptor).CurrentValue, nameof(Session_TracksDirtyStateForParentBooleanFields));
+            AssertTrue(row.IsDirty, nameof(Session_TracksDirtyStateForParentBooleanFields));
         }
 
         private static void Session_ApplyWritesDirtyRowsAndCreatesBackups()
         {
-            string outputDirectory = CreateTempDirectory();
-            try
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string outputPath = outputDirectory.Path;
+            string aPath = TestFileSupport.CreateBgsm(outputPath, "a.bgsm", material =>
             {
-                string aPath = CreateBgsm(outputDirectory, "a.bgsm", version: 2, diffuseTexture: "textures\\a.dds");
-                string bPath = CreateBgsm(outputDirectory, "b.bgsm", version: 2, diffuseTexture: "textures\\b.dds");
-
-                var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { aPath, bPath });
-                var diffuseDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.Diffuse);
-
-                AssertTrue(session.TrySetCellValue(session.Rows[0], diffuseDescriptor, "textures\\updated.dds", out string errorMessage), nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
-                AssertEqual(string.Empty, errorMessage ?? string.Empty, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
-
-                var results = session.ApplyChanges(backupBeforeWrite: true);
-
-                AssertEqual(FieldCopyStatus.Success, results.Single(result => result.TargetPath == MaterialFilePersistence.NormalizePath(aPath)).Status, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
-                AssertEqual(FieldCopyStatus.Skipped, results.Single(result => result.TargetPath == MaterialFilePersistence.NormalizePath(bPath)).Status, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
-                AssertTrue(File.Exists($"{aPath}.bak"), nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
-                AssertEqual("textures\\updated.dds", LoadBgsm(aPath).DiffuseTexture, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
-                AssertTrue(!session.Rows[0].IsDirty, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
-            }
-            finally
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\a.dds";
+            });
+            string bPath = TestFileSupport.CreateBgsm(outputPath, "b.bgsm", material =>
             {
-                DeleteDirectory(outputDirectory);
-            }
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\b.dds";
+            });
+
+            var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { aPath, bPath });
+            var diffuseDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.Diffuse);
+
+            AssertTrue(session.TrySetCellValue(session.Rows[0], diffuseDescriptor, "textures\\updated.dds", out string errorMessage), nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
+            AssertEqual(string.Empty, errorMessage ?? string.Empty, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
+
+            var results = session.ApplyChanges(backupBeforeWrite: true);
+
+            AssertEqual(FieldCopyStatus.Success, results.Single(result => result.TargetPath == MaterialFilePersistence.NormalizePath(aPath)).Status, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
+            AssertEqual(FieldCopyStatus.Skipped, results.Single(result => result.TargetPath == MaterialFilePersistence.NormalizePath(bPath)).Status, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
+            AssertTrue(File.Exists($"{aPath}.bak"), nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
+            AssertEqual("textures\\updated.dds", TestFileSupport.LoadBgsm(aPath).DiffuseTexture, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
+            AssertTrue(!session.Rows[0].IsDirty, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
         }
 
         private static void Session_ApplyFailureLeavesRowDirty()
         {
-            string outputDirectory = CreateTempDirectory();
-            try
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string path = TestFileSupport.CreateBgsm(outputDirectory.Path, "locked.bgsm", material =>
             {
-                string path = CreateBgsm(outputDirectory, "locked.bgsm", version: 2, diffuseTexture: "textures\\locked.dds");
-                var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { path });
-                var diffuseDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.Diffuse);
-                AssertTrue(session.TrySetCellValue(session.Rows[0], diffuseDescriptor, "textures\\changed.dds", out _), nameof(Session_ApplyFailureLeavesRowDirty));
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\locked.dds";
+            });
+            var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { path });
+            var diffuseDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.Diffuse);
+            AssertTrue(session.TrySetCellValue(session.Rows[0], diffuseDescriptor, "textures\\changed.dds", out _), nameof(Session_ApplyFailureLeavesRowDirty));
 
-                using var lockStream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-                var results = session.ApplyChanges(backupBeforeWrite: false);
+            using var lockStream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            var results = session.ApplyChanges(backupBeforeWrite: false);
 
-                AssertEqual(FieldCopyStatus.Failed, results.Single().Status, nameof(Session_ApplyFailureLeavesRowDirty));
-                AssertTrue(session.Rows[0].IsDirty, nameof(Session_ApplyFailureLeavesRowDirty));
-            }
-            finally
-            {
-                DeleteDirectory(outputDirectory);
-            }
+            AssertEqual(FieldCopyStatus.Failed, results.Single().Status, nameof(Session_ApplyFailureLeavesRowDirty));
+            AssertTrue(session.Rows[0].IsDirty, nameof(Session_ApplyFailureLeavesRowDirty));
         }
 
         private static void Session_ApplySelectedWritesOnlySelectedDirtyRows()
         {
-            string outputDirectory = CreateTempDirectory();
-            try
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string outputPath = outputDirectory.Path;
+            string aPath = TestFileSupport.CreateBgsm(outputPath, "a.bgsm", material =>
             {
-                string aPath = CreateBgsm(outputDirectory, "a.bgsm", version: 2, diffuseTexture: "textures\\a.dds");
-                string bPath = CreateBgsm(outputDirectory, "b.bgsm", version: 2, diffuseTexture: "textures\\b.dds");
-
-                var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { aPath, bPath });
-                var diffuseDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.Diffuse);
-                AssertTrue(session.TrySetCellValue(session.Rows[0], diffuseDescriptor, "textures\\a_changed.dds", out _), nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
-                AssertTrue(session.TrySetCellValue(session.Rows[1], diffuseDescriptor, "textures\\b_changed.dds", out _), nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
-
-                var results = session.ApplySelectedChanges(new[] { session.Rows[1] }, backupBeforeWrite: false);
-
-                AssertEqual(1, results.Count, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
-                AssertEqual(FieldCopyStatus.Success, results.Single().Status, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
-                AssertEqual("textures\\a.dds", LoadBgsm(aPath).DiffuseTexture, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
-                AssertEqual("textures\\b_changed.dds", LoadBgsm(bPath).DiffuseTexture, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
-                AssertTrue(session.Rows[0].IsDirty, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
-                AssertTrue(!session.Rows[1].IsDirty, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
-            }
-            finally
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\a.dds";
+            });
+            string bPath = TestFileSupport.CreateBgsm(outputPath, "b.bgsm", material =>
             {
-                DeleteDirectory(outputDirectory);
-            }
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\b.dds";
+            });
+
+            var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { aPath, bPath });
+            var diffuseDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.Diffuse);
+            AssertTrue(session.TrySetCellValue(session.Rows[0], diffuseDescriptor, "textures\\a_changed.dds", out _), nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
+            AssertTrue(session.TrySetCellValue(session.Rows[1], diffuseDescriptor, "textures\\b_changed.dds", out _), nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
+
+            var results = session.ApplySelectedChanges(new[] { session.Rows[1] }, backupBeforeWrite: false);
+
+            AssertEqual(1, results.Count, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
+            AssertEqual(FieldCopyStatus.Success, results.Single().Status, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
+            AssertEqual("textures\\a.dds", TestFileSupport.LoadBgsm(aPath).DiffuseTexture, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
+            AssertEqual("textures\\b_changed.dds", TestFileSupport.LoadBgsm(bPath).DiffuseTexture, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
+            AssertTrue(session.Rows[0].IsDirty, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
+            AssertTrue(!session.Rows[1].IsDirty, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
         }
 
         private static void Session_AddFilesKeepsDirtyStateAndDedupes()
         {
-            string outputDirectory = CreateTempDirectory();
-            try
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string outputPath = outputDirectory.Path;
+            string aPath = TestFileSupport.CreateBgsm(outputPath, "a.bgsm", material =>
             {
-                string aPath = CreateBgsm(outputDirectory, "a.bgsm", version: 2, diffuseTexture: "textures\\a.dds");
-                string bPath = CreateBgsm(outputDirectory, "b.bgsm", version: 2, diffuseTexture: "textures\\b.dds");
-                string cPath = CreateBgsm(outputDirectory, "c.bgsm", version: 2, diffuseTexture: "textures\\c.dds");
-
-                var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { aPath, bPath });
-                var diffuseDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.Diffuse);
-                AssertTrue(session.TrySetCellValue(session.Rows[0], diffuseDescriptor, "textures\\updated.dds", out _), nameof(Session_AddFilesKeepsDirtyStateAndDedupes));
-
-                BulkMaterialSessionAddResult addResult = session.AddFiles(new[] { bPath, cPath });
-
-                AssertEqual(1, addResult.DuplicateCount, nameof(Session_AddFilesKeepsDirtyStateAndDedupes));
-                AssertEqual(3, session.Rows.Count, nameof(Session_AddFilesKeepsDirtyStateAndDedupes));
-                AssertTrue(session.Rows.Any(row => row.FilePath == MaterialFilePersistence.NormalizePath(cPath)), nameof(Session_AddFilesKeepsDirtyStateAndDedupes));
-                AssertTrue(session.Rows.Any(row => row.IsDirty), nameof(Session_AddFilesKeepsDirtyStateAndDedupes));
-            }
-            finally
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\a.dds";
+            });
+            string bPath = TestFileSupport.CreateBgsm(outputPath, "b.bgsm", material =>
             {
-                DeleteDirectory(outputDirectory);
-            }
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\b.dds";
+            });
+            string cPath = TestFileSupport.CreateBgsm(outputPath, "c.bgsm", material =>
+            {
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\c.dds";
+            });
+
+            var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { aPath, bPath });
+            var diffuseDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.Diffuse);
+            AssertTrue(session.TrySetCellValue(session.Rows[0], diffuseDescriptor, "textures\\updated.dds", out _), nameof(Session_AddFilesKeepsDirtyStateAndDedupes));
+
+            BulkMaterialSessionAddResult addResult = session.AddFiles(new[] { bPath, cPath });
+
+            AssertEqual(1, addResult.DuplicateCount, nameof(Session_AddFilesKeepsDirtyStateAndDedupes));
+            AssertEqual(3, session.Rows.Count, nameof(Session_AddFilesKeepsDirtyStateAndDedupes));
+            AssertTrue(session.Rows.Any(row => row.FilePath == MaterialFilePersistence.NormalizePath(cPath)), nameof(Session_AddFilesKeepsDirtyStateAndDedupes));
+            AssertTrue(session.Rows.Any(row => row.IsDirty), nameof(Session_AddFilesKeepsDirtyStateAndDedupes));
         }
 
         private static void SelectionService_SplitsMixedTypes()
@@ -274,79 +286,24 @@ namespace MaterialEditor.Tests
 
         private static void Export_UsesPatternTokensForCurrentRows()
         {
-            string outputDirectory = CreateTempDirectory();
-            try
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string outputPath = outputDirectory.Path;
+            string sourcePath = TestFileSupport.CreateBgem(outputPath, "effect.bgem", material =>
             {
-                string sourcePath = CreateBgem(outputDirectory, "effect.bgem", version: 11, baseTexture: "textures\\effect.dds");
-                var session = BulkMaterialEditSession.Create(MaterialType.Effect, new[] { sourcePath });
-                string exportPattern = Path.Combine(outputDirectory, "exports", "{name}_{indexNN}{ext}");
+                material.Version = 11;
+                material.BaseTexture = "textures\\effect.dds";
+            });
+            var session = BulkMaterialEditSession.Create(MaterialType.Effect, new[] { sourcePath });
+            string exportPattern = Path.Combine(outputPath, "exports", "{name}_{indexNN}{ext}");
 
-                IReadOnlyList<string> preview = BulkMaterialExportService.PreviewOutputPaths(session.Rows, exportPattern);
-                IReadOnlyList<FieldCopyResult> results = BulkMaterialExportService.Export(session.Rows, exportPattern, serializeAsJson: false);
+            IReadOnlyList<string> preview = BulkMaterialExportService.PreviewOutputPaths(session.Rows, exportPattern);
+            IReadOnlyList<FieldCopyResult> results = BulkMaterialExportService.Export(session.Rows, exportPattern, serializeAsJson: false);
 
-                string expectedPath = Path.Combine(outputDirectory, "exports", "effect_01.bgem");
-                AssertEqual(expectedPath, preview.Single(), nameof(Export_UsesPatternTokensForCurrentRows));
-                AssertEqual(FieldCopyStatus.Success, results.Single().Status, nameof(Export_UsesPatternTokensForCurrentRows));
-                AssertTrue(File.Exists(expectedPath), nameof(Export_UsesPatternTokensForCurrentRows));
-            }
-            finally
-            {
-                DeleteDirectory(outputDirectory);
-            }
-        }
-
-        private static string CreateBgsm(string directory, string fileName, uint version, string diffuseTexture)
-        {
-            string path = Path.Combine(directory, fileName);
-            var material = new BGSM
-            {
-                Version = version,
-                DiffuseTexture = diffuseTexture
-            };
-            SaveMaterial(path, material);
-            return path;
-        }
-
-        private static string CreateBgem(string directory, string fileName, uint version, string baseTexture)
-        {
-            string path = Path.Combine(directory, fileName);
-            var material = new BGEM
-            {
-                Version = version,
-                BaseTexture = baseTexture
-            };
-            SaveMaterial(path, material);
-            return path;
-        }
-
-        private static void SaveMaterial(string path, BaseMaterialFile material)
-        {
-            using var stream = new FileStream(path, FileMode.Create, FileAccess.Write);
-            if (!material.Save(stream))
-                throw new InvalidOperationException($"Failed to create test material '{path}'.");
-        }
-
-        private static BGSM LoadBgsm(string path)
-        {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read);
-            var material = new BGSM();
-            if (!material.Open(stream))
-                throw new InvalidOperationException($"Failed to load material '{path}'.");
-
-            return material;
-        }
-
-        private static string CreateTempDirectory()
-        {
-            string path = Path.Combine(Path.GetTempPath(), "MaterialEditorTests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(path);
-            return path;
-        }
-
-        private static void DeleteDirectory(string path)
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
+            string expectedPath = Path.Combine(outputPath, "exports", "effect_01.bgem");
+            FieldCopyResult exportResult = results.Single();
+            AssertEqual(expectedPath, preview.Single(), nameof(Export_UsesPatternTokensForCurrentRows));
+            AssertEqual(FieldCopyStatus.Success, exportResult.Status, $"{nameof(Export_UsesPatternTokensForCurrentRows)} [{exportResult.Message}]");
+            AssertTrue(File.Exists(expectedPath), nameof(Export_UsesPatternTokensForCurrentRows));
         }
 
         private static void AssertEqual<T>(T expected, T actual, string testName)

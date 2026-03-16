@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using Material_Editor.AdvancedVariant;
 
@@ -148,11 +147,11 @@ namespace Material_Editor.Services
             string expectedExtension = MaterialFileTypeHelper.GetExpectedExtension(materialType);
             AdvancedVariantResolvedContext[] advancedContexts = ResolveAdvancedContexts(options.AdvancedVariant);
             var targetOverrides = (options.Targets ?? Array.Empty<IterativeTargetOverride>())
-                .GroupBy(item => NormalizePath(item.TargetPath), StringComparer.OrdinalIgnoreCase)
+                .GroupBy(item => MaterialFilePersistence.NormalizePath(item.TargetPath), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
 
             var orderedTargets = (targetFiles ?? Array.Empty<string>())
-                .Select(NormalizePath)
+                .Select(MaterialFilePersistence.NormalizePath)
                 .Where(path => !string.IsNullOrWhiteSpace(path))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
@@ -216,21 +215,6 @@ namespace Material_Editor.Services
             return AdvancedVariantEngine.Resolve(options)
                 .Where(context => context.Enabled)
                 .ToArray();
-        }
-
-        private static string NormalizePath(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-                return string.Empty;
-
-            try
-            {
-                return Path.GetFullPath(path.Trim());
-            }
-            catch
-            {
-                return path.Trim();
-            }
         }
     }
 }

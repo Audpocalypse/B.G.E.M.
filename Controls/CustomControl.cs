@@ -150,11 +150,6 @@ namespace Material_Editor.Controls
             return null;
         }
 
-        public static IEnumerable<string> GetRegisteredNames()
-        {
-            return customControls.Keys;
-        }
-
         public static string GetTooltip(string name)
         {
             if (customControls.TryGetValue(name, out CustomControl control))
@@ -183,12 +178,6 @@ namespace Material_Editor.Controls
                 control.SetVisible(visible);
                 control.Serialize = serialize;
             }
-        }
-
-        public static void SetSerialize(string name, bool visible)
-        {
-            if (customControls.TryGetValue(name, out CustomControl value))
-                value.Serialize = visible;
         }
 
         public static void SetTooltip(string name, ToolTip parentTooltip, string toolTip)

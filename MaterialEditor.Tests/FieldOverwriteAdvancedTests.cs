@@ -104,148 +104,103 @@ namespace MaterialEditor.Tests
 
         private static void Run_AdvancedModeUpdatesOnlySteppedTargets()
         {
-            string outputDirectory = CreateTempDirectory();
-            try
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string outputPath = outputDirectory.Path;
+            string aPath = TestFileSupport.CreateBgsm(outputPath, "a.bgsm", material =>
             {
-                string aPath = CreateBgsm(outputDirectory, "a.bgsm", "textures\\orig_a.dds", 0.5f);
-                string bPath = CreateBgsm(outputDirectory, "b.bgsm", "textures\\orig_b.dds", 0.5f);
-                string cPath = CreateBgsm(outputDirectory, "c.bgsm", "textures\\orig_c.dds", 0.5f);
-                string dPath = CreateBgsm(outputDirectory, "d.bgsm", "textures\\orig_d.dds", 0.5f);
-                string wrongPath = CreateBgem(outputDirectory, "wrong.bgem", "textures\\effect.dds");
+                material.DiffuseTexture = "textures\\orig_a.dds";
+                material.GrayscaleToPaletteScale = 0.5f;
+            });
+            string bPath = TestFileSupport.CreateBgsm(outputPath, "b.bgsm", material =>
+            {
+                material.DiffuseTexture = "textures\\orig_b.dds";
+                material.GrayscaleToPaletteScale = 0.5f;
+            });
+            string cPath = TestFileSupport.CreateBgsm(outputPath, "c.bgsm", material =>
+            {
+                material.DiffuseTexture = "textures\\orig_c.dds";
+                material.GrayscaleToPaletteScale = 0.5f;
+            });
+            string dPath = TestFileSupport.CreateBgsm(outputPath, "d.bgsm", material =>
+            {
+                material.DiffuseTexture = "textures\\orig_d.dds";
+                material.GrayscaleToPaletteScale = 0.5f;
+            });
+            string wrongPath = TestFileSupport.CreateBgem(outputPath, "wrong.bgem", material => material.BaseTexture = "textures\\effect.dds");
 
-                var diffuseDescriptor = GetBgsmDescriptor(ControlNames.Diffuse);
-                var grayscaleDescriptor = GetBgsmDescriptor(ControlNames.GrayscaleToPaletteScale);
-                var tool = new FieldOverwriteTool();
-                var sourceState = new BGSM
-                {
-                    DiffuseTexture = "textures\\source.dds",
-                    GrayscaleToPaletteScale = 1.0f
-                };
+            var diffuseDescriptor = GetBgsmDescriptor(ControlNames.Diffuse);
+            var grayscaleDescriptor = GetBgsmDescriptor(ControlNames.GrayscaleToPaletteScale);
+            var tool = new FieldOverwriteTool();
+            var sourceState = new BGSM
+            {
+                DiffuseTexture = "textures\\source.dds",
+                GrayscaleToPaletteScale = 1.0f
+            };
 
-                var results = tool.Run(sourceState, new FieldOverwriteOptions
+            var results = tool.Run(sourceState, new FieldOverwriteOptions
+            {
+                Descriptors = new[] { diffuseDescriptor, grayscaleDescriptor },
+                TargetFiles = new[] { dPath, wrongPath, bPath, aPath, cPath },
+                IterativeOptions = new IterativeFieldOverwriteOptions
                 {
-                    Descriptors = new[] { diffuseDescriptor, grayscaleDescriptor },
-                    TargetFiles = new[] { dPath, wrongPath, bPath, aPath, cPath },
-                    IterativeOptions = new IterativeFieldOverwriteOptions
+                    StartIndex = 5,
+                    Count = 2,
+                    Step = 2,
+                    Assignments = new IterativeFieldAssignment[]
                     {
-                        StartIndex = 5,
-                        Count = 2,
-                        Step = 2,
-                        Assignments = new IterativeFieldAssignment[]
-                        {
-                            new(diffuseDescriptor, "textures\\iter_{indexTok}_{index:00}.dds"),
-                            new(grayscaleDescriptor, 1.5f, 0.25f)
-                        },
-                        Targets = new[]
-                        {
-                            new IterativeTargetOverride(aPath, "first"),
-                            new IterativeTargetOverride(cPath, "third")
-                        }
+                        new(diffuseDescriptor, "textures\\iter_{indexTok}_{index:00}.dds"),
+                        new(grayscaleDescriptor, 1.5f, 0.25f)
+                    },
+                    Targets = new[]
+                    {
+                        new IterativeTargetOverride(aPath, "first"),
+                        new IterativeTargetOverride(cPath, "third")
                     }
-                });
+                }
+            });
 
-                AssertEqual(5, results.Count, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
-                AssertEqual(2, results.Count(result => result.Status == FieldCopyStatus.Success), nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
-                AssertEqual(3, results.Count(result => result.Status == FieldCopyStatus.Skipped), nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
+            AssertEqual(5, results.Count, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
+            AssertEqual(2, results.Count(result => result.Status == FieldCopyStatus.Success), nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
+            AssertEqual(3, results.Count(result => result.Status == FieldCopyStatus.Skipped), nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
 
-                var aMaterial = LoadBgsm(aPath);
-                var bMaterial = LoadBgsm(bPath);
-                var cMaterial = LoadBgsm(cPath);
-                var dMaterial = LoadBgsm(dPath);
+            var aMaterial = TestFileSupport.LoadBgsm(aPath);
+            var bMaterial = TestFileSupport.LoadBgsm(bPath);
+            var cMaterial = TestFileSupport.LoadBgsm(cPath);
+            var dMaterial = TestFileSupport.LoadBgsm(dPath);
 
-                AssertEqual("textures\\iter_first_05.dds", aMaterial.DiffuseTexture, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
-                AssertEqual(1.5f, aMaterial.GrayscaleToPaletteScale, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
-                AssertEqual("textures\\orig_b.dds", bMaterial.DiffuseTexture, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
-                AssertEqual("textures\\iter_third_07.dds", cMaterial.DiffuseTexture, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
-                AssertEqual(1.75f, cMaterial.GrayscaleToPaletteScale, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
-                AssertEqual("textures\\orig_d.dds", dMaterial.DiffuseTexture, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
-            }
-            finally
-            {
-                DeleteDirectory(outputDirectory);
-            }
+            AssertEqual("textures\\iter_first_05.dds", aMaterial.DiffuseTexture, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
+            AssertEqual(1.5f, aMaterial.GrayscaleToPaletteScale, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
+            AssertEqual("textures\\orig_b.dds", bMaterial.DiffuseTexture, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
+            AssertEqual("textures\\iter_third_07.dds", cMaterial.DiffuseTexture, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
+            AssertEqual(1.75f, cMaterial.GrayscaleToPaletteScale, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
+            AssertEqual("textures\\orig_d.dds", dMaterial.DiffuseTexture, nameof(Run_AdvancedModeUpdatesOnlySteppedTargets));
         }
 
         private static void Run_LegacyModeStillCopiesSelectedFields()
         {
-            string outputDirectory = CreateTempDirectory();
-            try
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string outputPath = outputDirectory.Path;
+            string targetPath = TestFileSupport.CreateBgsm(outputPath, "target.bgsm", material =>
             {
-                string targetPath = CreateBgsm(outputDirectory, "target.bgsm", "textures\\before.dds", 0.5f);
-                var diffuseDescriptor = GetBgsmDescriptor(ControlNames.Diffuse);
-                var tool = new FieldOverwriteTool();
-                var sourceState = new BGSM
-                {
-                    DiffuseTexture = "textures\\after.dds"
-                };
-
-                var results = tool.Run(sourceState, new[] { diffuseDescriptor }, new[] { targetPath }, backupBeforeWrite: false);
-
-                AssertEqual(FieldCopyStatus.Success, results.Single().Status, nameof(Run_LegacyModeStillCopiesSelectedFields));
-                AssertEqual("textures\\after.dds", LoadBgsm(targetPath).DiffuseTexture, nameof(Run_LegacyModeStillCopiesSelectedFields));
-            }
-            finally
+                material.DiffuseTexture = "textures\\before.dds";
+                material.GrayscaleToPaletteScale = 0.5f;
+            });
+            var diffuseDescriptor = GetBgsmDescriptor(ControlNames.Diffuse);
+            var tool = new FieldOverwriteTool();
+            var sourceState = new BGSM
             {
-                DeleteDirectory(outputDirectory);
-            }
+                DiffuseTexture = "textures\\after.dds"
+            };
+
+            var results = tool.Run(sourceState, new[] { diffuseDescriptor }, new[] { targetPath }, backupBeforeWrite: false);
+
+            AssertEqual(FieldCopyStatus.Success, results.Single().Status, nameof(Run_LegacyModeStillCopiesSelectedFields));
+            AssertEqual("textures\\after.dds", TestFileSupport.LoadBgsm(targetPath).DiffuseTexture, nameof(Run_LegacyModeStillCopiesSelectedFields));
         }
 
         private static MaterialFieldDescriptor GetBgsmDescriptor(string label)
         {
             return MaterialFieldRegistry.GetDescriptors(new BGSM()).Single(descriptor => descriptor.Label == label);
-        }
-
-        private static string CreateBgsm(string directory, string fileName, string diffuseTexture, float grayscaleToPaletteScale)
-        {
-            string path = Path.Combine(directory, fileName);
-            var material = new BGSM
-            {
-                DiffuseTexture = diffuseTexture,
-                GrayscaleToPaletteScale = grayscaleToPaletteScale
-            };
-            SaveMaterial(path, material);
-            return path;
-        }
-
-        private static string CreateBgem(string directory, string fileName, string baseTexture)
-        {
-            string path = Path.Combine(directory, fileName);
-            var material = new BGEM
-            {
-                BaseTexture = baseTexture
-            };
-            SaveMaterial(path, material);
-            return path;
-        }
-
-        private static void SaveMaterial(string path, BaseMaterialFile material)
-        {
-            using var stream = new FileStream(path, FileMode.Create, FileAccess.Write);
-            if (!material.Save(stream))
-                throw new InvalidOperationException($"Failed to create test material '{path}'.");
-        }
-
-        private static BGSM LoadBgsm(string path)
-        {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read);
-            var material = new BGSM();
-            if (!material.Open(stream))
-                throw new InvalidOperationException($"Failed to load test material '{path}'.");
-
-            return material;
-        }
-
-        private static string CreateTempDirectory()
-        {
-            string path = Path.Combine(Path.GetTempPath(), "MaterialEditorTests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(path);
-            return path;
-        }
-
-        private static void DeleteDirectory(string path)
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
         }
 
         private static void AssertEqual<T>(T expected, T actual, string testName)

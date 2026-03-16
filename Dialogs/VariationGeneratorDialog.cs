@@ -5,7 +5,6 @@ using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace Material_Editor.Dialogs
@@ -21,8 +20,6 @@ namespace Material_Editor.Dialogs
             "Displacement",
             "Root Material Path"
         };
-
-        private static readonly Regex LegacyIndexPlaceholderRegex = new(@"\{index(?:\:[^\}]+)?\}", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private readonly BindingList<FieldRow> fieldRows;
         private readonly BindingList<AdvancedRuleRow> advancedRuleRows;
@@ -108,19 +105,18 @@ namespace Material_Editor.Dialogs
                 mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             scrollHost.Controls.Add(mainLayout);
 
-            headerLabel = CreateWrappingLabel("Generate multiple material files from the open template.", new Padding(0, 0, 0, 6));
-            AppearanceApplicator.SetFontRole(headerLabel, AppearanceFontRole.Bold);
+            headerLabel = DialogLayoutSupport.CreateWrappingLabel("Generate multiple material files from the open template.", new Padding(0, 0, 0, 6), bold: true);
             mainLayout.Controls.Add(headerLabel, 0, 0);
 
-            introLabel = CreateWrappingLabel(
+            introLabel = DialogLayoutSupport.CreateWrappingLabel(
                 "Follow the steps below: name the outputs, choose simple or advanced indexing, then enable any string or path fields you want to rewrite.",
                 new Padding(0, 0, 0, 12));
             mainLayout.Controls.Add(introLabel, 0, 1);
 
-            var outputStepLabel = CreateSectionHeader("1. Output Naming", new Padding(0, 0, 0, 4));
+            var outputStepLabel = DialogLayoutSupport.CreateWrappingLabel("1. Output Naming", new Padding(0, 0, 0, 4), bold: true);
             mainLayout.Controls.Add(outputStepLabel, 0, 2);
 
-            outputHelpLabel = CreateWrappingLabel(string.Empty, new Padding(0, 0, 0, 6));
+            outputHelpLabel = DialogLayoutSupport.CreateWrappingLabel(string.Empty, new Padding(0, 0, 0, 6));
             mainLayout.Controls.Add(outputHelpLabel, 0, 3);
 
             var outputPatternLayout = new TableLayoutPanel
@@ -153,12 +149,12 @@ namespace Material_Editor.Dialogs
             outputPatternLayout.Controls.Add(browseButton, 1, 0);
             mainLayout.Controls.Add(outputPatternLayout, 0, 4);
 
-            mainLayout.Controls.Add(CreateCaptionLabel("Output Preview", new Padding(0, 0, 0, 4)), 0, 5);
+            mainLayout.Controls.Add(DialogLayoutSupport.CreateWrappingLabel("Output Preview", new Padding(0, 0, 0, 4)), 0, 5);
 
-            outputPreviewTextBox = CreatePreviewTextBox(64, new Padding(0, 0, 0, 12));
+            outputPreviewTextBox = DialogLayoutSupport.CreatePreviewTextBox(64, new Padding(0, 0, 0, 12));
             mainLayout.Controls.Add(outputPreviewTextBox, 0, 6);
 
-            var indexingStepLabel = CreateSectionHeader("2. Indexing", new Padding(0, 0, 0, 4));
+            var indexingStepLabel = DialogLayoutSupport.CreateWrappingLabel("2. Indexing", new Padding(0, 0, 0, 4), bold: true);
             mainLayout.Controls.Add(indexingStepLabel, 0, 7);
 
             advancedModeCheckBox = new ColorToggleCheckBox
@@ -170,7 +166,7 @@ namespace Material_Editor.Dialogs
             advancedModeCheckBox.CheckedChanged += AdvancedModeCheckBox_CheckedChanged;
             mainLayout.Controls.Add(advancedModeCheckBox, 0, 8);
 
-            indexHelpLabel = CreateWrappingLabel(string.Empty, new Padding(0, 0, 0, 6));
+            indexHelpLabel = DialogLayoutSupport.CreateWrappingLabel(string.Empty, new Padding(0, 0, 0, 6));
             mainLayout.Controls.Add(indexHelpLabel, 0, 9);
 
             legacyRangeGroup = new GroupBox
@@ -192,18 +188,18 @@ namespace Material_Editor.Dialogs
                 rangeLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             rangeLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
-            rangeLayout.Controls.Add(CreateInlineLabel("Start index:"), 0, 0);
-            startIndexControl = CreateNumericInput(0, 9999, 1);
+            rangeLayout.Controls.Add(DialogLayoutSupport.CreateInlineLabel("Start index:", new Padding(0, 4, 8, 0)), 0, 0);
+            startIndexControl = DialogLayoutSupport.CreateNumericInput(0, 9999, 1, 104, new Padding(0, 0, 16, 0));
             startIndexControl.ValueChanged += HandleConfigurationChanged;
             rangeLayout.Controls.Add(startIndexControl, 1, 0);
 
-            rangeLayout.Controls.Add(CreateInlineLabel("Count:"), 2, 0);
-            countControl = CreateNumericInput(1, 999, 3);
+            rangeLayout.Controls.Add(DialogLayoutSupport.CreateInlineLabel("Count:", new Padding(0, 4, 8, 0)), 2, 0);
+            countControl = DialogLayoutSupport.CreateNumericInput(1, 999, 3, 104, new Padding(0, 0, 16, 0));
             countControl.ValueChanged += HandleConfigurationChanged;
             rangeLayout.Controls.Add(countControl, 3, 0);
 
-            rangeLayout.Controls.Add(CreateInlineLabel("Step:"), 4, 0);
-            stepControl = CreateNumericInput(1, 999, 1);
+            rangeLayout.Controls.Add(DialogLayoutSupport.CreateInlineLabel("Step:", new Padding(0, 4, 8, 0)), 4, 0);
+            stepControl = DialogLayoutSupport.CreateNumericInput(1, 999, 1, 104, new Padding(0, 0, 16, 0));
             stepControl.ValueChanged += HandleConfigurationChanged;
             rangeLayout.Controls.Add(stepControl, 5, 0);
 
@@ -229,44 +225,24 @@ namespace Material_Editor.Dialogs
             };
             advancedLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
-            var countsLayout = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                WrapContents = true,
-                FlowDirection = FlowDirection.LeftToRight,
-                Margin = new Padding(0, 0, 0, 8)
-            };
-
-            advancedLayerCountControls = new NumericUpDown[4];
-            for (int index = 0; index < advancedLayerCountControls.Length; index++)
-            {
-                var countItemPanel = new FlowLayoutPanel
-                {
-                    AutoSize = true,
-                    WrapContents = false,
-                    FlowDirection = FlowDirection.LeftToRight,
-                    Margin = new Padding(0, 0, 16, 6)
-                };
-                countItemPanel.Controls.Add(CreateInlineLabel($"Layer {index + 1} count:"));
-
-                decimal defaultValue = index == 0 ? 3 : 0;
-                var layerCount = CreateNumericInput(0, 99, defaultValue);
-                layerCount.ValueChanged += HandleAdvancedDefinitionChanged;
-                advancedLayerCountControls[index] = layerCount;
-                countItemPanel.Controls.Add(layerCount);
-
-                countsLayout.Controls.Add(countItemPanel);
-            }
+            (FlowLayoutPanel countsLayout, advancedLayerCountControls) = AdvancedVariantDialogSupport.CreateLayerCountLayout(
+                layerCount: 4,
+                defaultValueFactory: index => index == 0 ? 3m : 0m,
+                valueChangedHandler: HandleAdvancedDefinitionChanged,
+                layoutMargin: new Padding(0, 0, 0, 8),
+                itemMargin: new Padding(0, 0, 16, 6),
+                labelMargin: new Padding(0, 4, 8, 0),
+                numericWidth: 104,
+                numericMargin: new Padding(0, 0, 16, 0));
             advancedLayout.Controls.Add(countsLayout, 0, 0);
 
-            advancedHelpLabel = CreateWrappingLabel(string.Empty, new Padding(0, 0, 0, 6));
+            advancedHelpLabel = DialogLayoutSupport.CreateWrappingLabel(string.Empty, new Padding(0, 0, 0, 6));
             advancedLayout.Controls.Add(advancedHelpLabel, 0, 1);
 
-            advancedWarningLabel = CreateWrappingLabel(string.Empty, new Padding(0, 0, 0, 8));
+            advancedWarningLabel = DialogLayoutSupport.CreateWrappingLabel(string.Empty, new Padding(0, 0, 0, 8));
             advancedLayout.Controls.Add(advancedWarningLabel, 0, 2);
 
-            advancedLayout.Controls.Add(CreateCaptionLabel("Naming Rules", new Padding(0, 0, 0, 4)), 0, 3);
+            advancedLayout.Controls.Add(DialogLayoutSupport.CreateWrappingLabel("Naming Rules", new Padding(0, 0, 0, 4)), 0, 3);
 
             var ruleButtonsLayout = new FlowLayoutPanel
             {
@@ -276,43 +252,19 @@ namespace Material_Editor.Dialogs
                 Margin = new Padding(0, 0, 0, 6)
             };
 
-            addRuleButton = new Button
-            {
-                Text = "Add Rule",
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0, 0, 8, 0)
-            };
+            addRuleButton = DialogLayoutSupport.CreateCommandButton("Add Rule", new Padding(0, 0, 8, 0));
             addRuleButton.Click += AddRuleButton_Click;
             ruleButtonsLayout.Controls.Add(addRuleButton);
 
-            deleteRuleButton = new Button
-            {
-                Text = "Delete Rule",
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0, 0, 8, 0)
-            };
+            deleteRuleButton = DialogLayoutSupport.CreateCommandButton("Delete Rule", new Padding(0, 0, 8, 0));
             deleteRuleButton.Click += DeleteRuleButton_Click;
             ruleButtonsLayout.Controls.Add(deleteRuleButton);
 
-            moveRuleUpButton = new Button
-            {
-                Text = "Move Up",
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0, 0, 8, 0)
-            };
+            moveRuleUpButton = DialogLayoutSupport.CreateCommandButton("Move Up", new Padding(0, 0, 8, 0));
             moveRuleUpButton.Click += MoveRuleUpButton_Click;
             ruleButtonsLayout.Controls.Add(moveRuleUpButton);
 
-            moveRuleDownButton = new Button
-            {
-                Text = "Move Down",
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0)
-            };
+            moveRuleDownButton = DialogLayoutSupport.CreateCommandButton("Move Down", new Padding(0));
             moveRuleDownButton.Click += MoveRuleDownButton_Click;
             ruleButtonsLayout.Controls.Add(moveRuleDownButton);
 
@@ -335,28 +287,7 @@ namespace Material_Editor.Dialogs
                 ShowCellToolTips = true,
                 ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize
             };
-            advancedLayerColumns = new DataGridViewComboBoxColumn[4];
-            for (int index = 0; index < advancedLayerColumns.Length; index++)
-            {
-                var column = new DataGridViewComboBoxColumn
-                {
-                    DataPropertyName = nameof(AdvancedRuleRow.Layer1MatchText).Replace("1", (index + 1).ToString()),
-                    HeaderText = $"Layer {index + 1}",
-                    DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton,
-                    FlatStyle = FlatStyle.Flat,
-                    AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-                    FillWeight = 10f
-                };
-                advancedLayerColumns[index] = column;
-                advancedGrid.Columns.Add(column);
-            }
-            advancedGrid.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                DataPropertyName = nameof(AdvancedRuleRow.IndexTok),
-                HeaderText = "indexTok",
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-                FillWeight = 18f
-            });
+            advancedLayerColumns = AdvancedVariantDialogSupport.AddRuleColumns(advancedGrid, layerCount: 4, layerFillWeight: 10f, indexTokenFillWeight: 18f);
             advancedGrid.CurrentCellDirtyStateChanged += AdvancedGrid_CurrentCellDirtyStateChanged;
             advancedGrid.CellBeginEdit += AdvancedGrid_CellBeginEdit;
             advancedGrid.CellEndEdit += AdvancedGrid_CellEndEdit;
@@ -415,17 +346,17 @@ namespace Material_Editor.Dialogs
             greyscaleLayout.Controls.Add(greyscaleModeCheckBox, 0, 0);
             greyscaleLayout.SetColumnSpan(greyscaleModeCheckBox, 5);
 
-            greyscaleLayout.Controls.Add(CreateInlineLabel("Start value:"), 0, 1);
-            greyscaleStartControl = CreateNumericInput(-1000, 1000, 1, 3, 0.1m);
+            greyscaleLayout.Controls.Add(DialogLayoutSupport.CreateInlineLabel("Start value:", new Padding(0, 4, 8, 0)), 0, 1);
+            greyscaleStartControl = DialogLayoutSupport.CreateNumericInput(-1000, 1000, 1, 104, new Padding(0, 0, 16, 0), 3, 0.1m);
             greyscaleStartControl.ValueChanged += HandleConfigurationChanged;
             greyscaleLayout.Controls.Add(greyscaleStartControl, 1, 1);
 
-            greyscaleLayout.Controls.Add(CreateInlineLabel("Step:"), 2, 1);
-            greyscaleStepControl = CreateNumericInput(-1000, 1000, 0, 3, 0.1m);
+            greyscaleLayout.Controls.Add(DialogLayoutSupport.CreateInlineLabel("Step:", new Padding(0, 4, 8, 0)), 2, 1);
+            greyscaleStepControl = DialogLayoutSupport.CreateNumericInput(-1000, 1000, 0, 104, new Padding(0, 0, 16, 0), 3, 0.1m);
             greyscaleStepControl.ValueChanged += HandleConfigurationChanged;
             greyscaleLayout.Controls.Add(greyscaleStepControl, 3, 1);
 
-            greyscaleNoteLabel = CreateWrappingLabel(
+            greyscaleNoteLabel = DialogLayoutSupport.CreateWrappingLabel(
                 "Each generated file will use start + step * file index offset when enabled.",
                 new Padding(0, 8, 0, 0));
             greyscaleLayout.Controls.Add(greyscaleNoteLabel, 0, 2);
@@ -433,10 +364,10 @@ namespace Material_Editor.Dialogs
             greyscaleGroup.Controls.Add(greyscaleLayout);
             mainLayout.Controls.Add(greyscaleGroup, 0, 12);
 
-            var fieldStepLabel = CreateSectionHeader("3. Fields To Vary", new Padding(0, 0, 0, 4));
+            var fieldStepLabel = DialogLayoutSupport.CreateWrappingLabel("3. Fields To Vary", new Padding(0, 0, 0, 4), bold: true);
             mainLayout.Controls.Add(fieldStepLabel, 0, 13);
 
-            fieldHelpLabel = CreateWrappingLabel(string.Empty, new Padding(0, 0, 0, 8));
+            fieldHelpLabel = DialogLayoutSupport.CreateWrappingLabel(string.Empty, new Padding(0, 0, 0, 8));
             mainLayout.Controls.Add(fieldHelpLabel, 0, 14);
 
             fieldRows = new BindingList<FieldRow>(CreateFieldRows(descriptors, currentValues).ToList());
@@ -507,12 +438,12 @@ namespace Material_Editor.Dialogs
             fieldGridHost.Controls.Add(fieldGrid);
             mainLayout.Controls.Add(fieldGridHost, 0, 15);
 
-            mainLayout.Controls.Add(CreateCaptionLabel("Field Preview", new Padding(0, 0, 0, 4)), 0, 16);
+            mainLayout.Controls.Add(DialogLayoutSupport.CreateWrappingLabel("Field Preview", new Padding(0, 0, 0, 4)), 0, 16);
 
-            fieldPreviewTextBox = CreatePreviewTextBox(52, new Padding(0, 0, 0, 8));
+            fieldPreviewTextBox = DialogLayoutSupport.CreatePreviewTextBox(52, new Padding(0, 0, 0, 8));
             mainLayout.Controls.Add(fieldPreviewTextBox, 0, 17);
 
-            var previewStepLabel = CreateSectionHeader("4. Preview / Generate", new Padding(0, 0, 0, 4));
+            var previewStepLabel = DialogLayoutSupport.CreateWrappingLabel("4. Preview / Generate", new Padding(0, 0, 0, 4), bold: true);
             mainLayout.Controls.Add(previewStepLabel, 0, 18);
 
             var footerLayout = new TableLayoutPanel
@@ -534,10 +465,10 @@ namespace Material_Editor.Dialogs
             };
             footerMessageLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
-            summaryLabel = CreateWrappingLabel(string.Empty, new Padding(0, 0, 0, 4));
+            summaryLabel = DialogLayoutSupport.CreateWrappingLabel(string.Empty, new Padding(0, 0, 0, 4));
             footerMessageLayout.Controls.Add(summaryLabel, 0, 0);
 
-            validationLabel = CreateWrappingLabel(string.Empty, new Padding(0));
+            validationLabel = DialogLayoutSupport.CreateWrappingLabel(string.Empty, new Padding(0));
             footerMessageLayout.Controls.Add(validationLabel, 0, 1);
 
             footerLayout.Controls.Add(footerMessageLayout, 0, 0);
@@ -602,94 +533,11 @@ namespace Material_Editor.Dialogs
             RefreshValidationColors();
         }
 
-        private Label CreateSectionHeader(string text, Padding margin)
-        {
-            var label = CreateWrappingLabel(text, margin);
-            AppearanceApplicator.SetFontRole(label, AppearanceFontRole.Bold);
-            return label;
-        }
-
-        private static Label CreateCaptionLabel(string text, Padding margin)
-        {
-            return new Label
-            {
-                Text = text,
-                AutoSize = true,
-                Dock = DockStyle.Top,
-                Margin = margin
-            };
-        }
-
-        private static Label CreateWrappingLabel(string text, Padding margin)
-        {
-            return new Label
-            {
-                Text = text,
-                AutoSize = true,
-                Dock = DockStyle.Top,
-                Margin = margin
-            };
-        }
-
-        private static Label CreateInlineLabel(string text)
-        {
-            return new Label
-            {
-                Text = text,
-                AutoSize = true,
-                Anchor = AnchorStyles.Left,
-                Margin = new Padding(0, 4, 8, 0)
-            };
-        }
-
-        private static NumericUpDown CreateNumericInput(decimal minimum, decimal maximum, decimal value, int decimalPlaces = 0, decimal increment = 1m)
-        {
-            return new NumericUpDown
-            {
-                Minimum = minimum,
-                Maximum = maximum,
-                Value = value,
-                DecimalPlaces = decimalPlaces,
-                Increment = increment,
-                Width = 104,
-                Anchor = AnchorStyles.Left,
-                Margin = new Padding(0, 0, 16, 0)
-            };
-        }
-
-        private static TextBox CreatePreviewTextBox(int height, Padding margin)
-        {
-            return new TextBox
-            {
-                Multiline = true,
-                ReadOnly = true,
-                WordWrap = true,
-                ScrollBars = ScrollBars.Vertical,
-                Dock = DockStyle.Top,
-                Height = height,
-                Margin = margin,
-                TabStop = false,
-                ShortcutsEnabled = true
-            };
-        }
-
         private void HandleLayoutChanged(object sender, EventArgs e)
         {
-            UpdateMainLayoutWidth();
+            DialogLayoutSupport.UpdateMainLayoutWidth(scrollHost, mainLayout, 820);
             UpdateFieldGridHeight();
             UpdateWrappingLabelWidths();
-        }
-
-        private void UpdateMainLayoutWidth()
-        {
-            if (scrollHost == null || mainLayout == null)
-                return;
-
-            int availableWidth = scrollHost.ClientSize.Width;
-            if (scrollHost.VerticalScroll.Visible)
-                availableWidth -= SystemInformation.VerticalScrollBarWidth;
-
-            mainLayout.Width = Math.Max(availableWidth, 820);
         }
 
         private void UpdateFieldGridHeight()
@@ -707,33 +555,18 @@ namespace Material_Editor.Dialogs
 
         private void UpdateWrappingLabelWidths()
         {
-            SetWrappingWidth(headerLabel);
-            SetWrappingWidth(introLabel);
-            SetWrappingWidth(outputHelpLabel);
-            SetWrappingWidth(indexHelpLabel);
-            SetWrappingWidth(advancedHelpLabel);
-            SetWrappingWidth(advancedWarningLabel);
-            SetWrappingWidth(greyscaleNoteLabel);
-            SetWrappingWidth(fieldHelpLabel);
-            SetWrappingWidth(summaryLabel);
-            SetWrappingWidth(validationLabel);
-        }
-
-        private static void SetWrappingWidth(Label label)
-        {
-            if (label?.Parent == null)
-                return;
-
-            int availableWidth = 0;
-            for (Control current = label.Parent; current != null; current = current.Parent)
-                availableWidth = Math.Max(availableWidth, current.ClientSize.Width);
-
-            if (label.Parent is ScrollableControl scrollableControl)
-                availableWidth -= scrollableControl.Padding.Horizontal;
-
-            availableWidth = Math.Max(100, availableWidth - label.Margin.Horizontal);
-            if (label.MaximumSize.Width != availableWidth)
-                label.MaximumSize = new Size(availableWidth, 0);
+            DialogLayoutSupport.SetWrappingWidths(
+                100,
+                headerLabel,
+                introLabel,
+                outputHelpLabel,
+                indexHelpLabel,
+                advancedHelpLabel,
+                advancedWarningLabel,
+                greyscaleNoteLabel,
+                fieldHelpLabel,
+                summaryLabel,
+                validationLabel);
         }
 
         public MaterialVariationOptions Options { get; private set; }
@@ -883,9 +716,7 @@ namespace Material_Editor.Dialogs
 
         private void AdvancedGrid_CurrentCellDirtyStateChanged(object sender, EventArgs e)
         {
-            if (advancedGrid.IsCurrentCellDirty
-                && advancedGrid.CurrentCell is DataGridViewComboBoxCell)
-                advancedGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            AdvancedVariantDialogSupport.CommitComboBoxEditIfDirty(advancedGrid);
         }
 
         private void AdvancedGrid_CellBeginEdit(object sender, DataGridViewCellCancelEventArgs e)
@@ -925,18 +756,18 @@ namespace Material_Editor.Dialogs
             suppressAdvancedRowEvents = true;
             try
             {
-                advancedRuleRows[selectedIndex].PropertyChanged -= AdvancedRuleRow_PropertyChanged;
-                advancedRuleRows.RemoveAt(selectedIndex);
+                selectedIndex = AdvancedVariantDialogSupport.DeleteSelectedRule(
+                    advancedRuleRows,
+                    selectedIndex,
+                    AdvancedRuleRow_PropertyChanged,
+                    ensureAtLeastOneRule: true);
             }
             finally
             {
                 suppressAdvancedRowEvents = false;
             }
 
-            if (advancedRuleRows.Count == 0)
-                AddAdvancedRuleRow();
-
-            SelectAdvancedRuleRow(Math.Min(selectedIndex, advancedRuleRows.Count - 1));
+            SelectAdvancedRuleRow(selectedIndex);
             RefreshUiState();
         }
 
@@ -958,20 +789,12 @@ namespace Material_Editor.Dialogs
             if (advancedGrid.Rows[e.RowIndex].DataBoundItem is not AdvancedRuleRow row)
                 return;
 
-            e.ToolTipText = e.ColumnIndex switch
-            {
-                0 => GetLayerColumnTooltipText(0),
-                1 => GetLayerColumnTooltipText(1),
-                2 => GetLayerColumnTooltipText(2),
-                3 => GetLayerColumnTooltipText(3),
-                4 => row.IndexTok,
-                _ => string.Empty
-            };
+            e.ToolTipText = AdvancedVariantDialogSupport.GetRuleCellTooltipText(row, e.ColumnIndex, advancedLayerCountControls, row.IndexTok);
         }
 
         private void AdvancedGrid_DataError(object sender, DataGridViewDataErrorEventArgs e)
         {
-            e.ThrowException = false;
+            AdvancedVariantDialogSupport.SuppressGridDataError(e);
         }
 
         private void FieldRow_PropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -1015,7 +838,7 @@ namespace Material_Editor.Dialogs
 
             var options = CreateOptions();
             advancedResolvedContexts = ResolveAdvancedContexts(options);
-            UpdateAdvancedWarning(options, advancedResolvedContexts);
+            UpdateAdvancedWarning(advancedResolvedContexts);
             string message = ValidateOptions(options, out var hasWarnings);
 
             outputPreviewTextBox.Text = BuildOutputPreview(options);
@@ -1128,10 +951,7 @@ namespace Material_Editor.Dialogs
         private AdvancedVariantOptions CreateAdvancedVariantOptions()
         {
             var layers = BuildAdvancedLayers();
-            var rules = advancedRuleRows
-                .Where(row => row.HasMeaningfulContent)
-                .Select((row, index) => row.ToRule(index))
-                .ToArray();
+            var rules = AdvancedVariantDialogSupport.BuildRules(advancedRuleRows, includeDefaultRuleWhenEmpty: false);
 
             return new AdvancedVariantOptions
             {
@@ -1142,19 +962,7 @@ namespace Material_Editor.Dialogs
 
         private IReadOnlyList<AdvancedVariantLayerDefinition> BuildAdvancedLayers()
         {
-            var layers = new List<AdvancedVariantLayerDefinition>();
-            for (int index = 0; index < advancedLayerCountControls.Length; index++)
-            {
-                int count = (int)advancedLayerCountControls[index].Value;
-                if (count <= 0)
-                    continue;
-
-                layers.Add(new AdvancedVariantLayerDefinition(
-                    $"Layer {index + 1}",
-                    Enumerable.Range(1, count).ToArray()));
-            }
-
-            return layers;
+            return AdvancedVariantDialogSupport.BuildLayers(advancedLayerCountControls, "Layer {0}");
         }
 
         private string ValidateOptions(MaterialVariationOptions options, out bool hasWarnings)
@@ -1295,7 +1103,7 @@ namespace Material_Editor.Dialogs
             if (string.IsNullOrWhiteSpace(outputPatternTextBox.Text))
                 return;
 
-            string normalized = LegacyIndexPlaceholderRegex.Replace(outputPatternTextBox.Text, "{indexNN}");
+            string normalized = MaterialVariationGenerator.NormalizeLegacyOutputPatternForAdvancedMode(outputPatternTextBox.Text);
             if (!string.Equals(normalized, outputPatternTextBox.Text, StringComparison.Ordinal))
                 outputPatternTextBox.Text = normalized;
         }
@@ -1311,11 +1119,13 @@ namespace Material_Editor.Dialogs
             suppressAdvancedRowEvents = true;
             try
             {
-                var layers = BuildAdvancedLayers();
-                if (layers.Count == 0)
+                if (!AdvancedVariantDialogSupport.EnsureAtLeastOneRule(
+                    advancedRuleRows,
+                    BuildAdvancedLayers().Count,
+                    AdvancedRuleRow_PropertyChanged))
+                {
                     return;
-
-                AddAdvancedRuleRow();
+                }
             }
             finally
             {
@@ -1328,20 +1138,20 @@ namespace Material_Editor.Dialogs
         private void UpdateAdvancedRuleButtonState()
         {
             int selectedIndex = GetSelectedAdvancedRuleIndex();
-            bool hasSelection = selectedIndex >= 0 && selectedIndex < advancedRuleRows.Count;
             bool canModifyRules = IsAdvancedMode && BuildAdvancedLayers().Count > 0;
-
-            addRuleButton.Enabled = canModifyRules;
-            deleteRuleButton.Enabled = canModifyRules && hasSelection && advancedRuleRows.Count > 1;
-            moveRuleUpButton.Enabled = canModifyRules && hasSelection && selectedIndex > 0;
-            moveRuleDownButton.Enabled = canModifyRules && hasSelection && selectedIndex >= 0 && selectedIndex < advancedRuleRows.Count - 1;
+            AdvancedVariantDialogSupport.UpdateRuleButtonState(
+                addRuleButton,
+                deleteRuleButton,
+                moveRuleUpButton,
+                moveRuleDownButton,
+                selectedIndex,
+                advancedRuleRows.Count,
+                canModifyRules);
         }
 
         private void AddAdvancedRuleRow()
         {
-            var row = new AdvancedRuleRow();
-            row.PropertyChanged += AdvancedRuleRow_PropertyChanged;
-            advancedRuleRows.Add(row);
+            AdvancedVariantDialogSupport.AddRule(advancedRuleRows, AdvancedRuleRow_PropertyChanged);
             SelectAdvancedRuleRow(advancedRuleRows.Count - 1);
         }
 
@@ -1355,9 +1165,7 @@ namespace Material_Editor.Dialogs
             suppressAdvancedRowEvents = true;
             try
             {
-                var row = advancedRuleRows[selectedIndex];
-                advancedRuleRows.RemoveAt(selectedIndex);
-                advancedRuleRows.Insert(targetIndex, row);
+                targetIndex = AdvancedVariantDialogSupport.MoveSelectedRule(advancedRuleRows, selectedIndex, direction);
             }
             finally
             {
@@ -1375,34 +1183,12 @@ namespace Material_Editor.Dialogs
 
         private void SelectAdvancedRuleRow(int rowIndex)
         {
-            if (rowIndex < 0 || rowIndex >= advancedGrid.Rows.Count)
-                return;
-
-            advancedGrid.ClearSelection();
-            advancedGrid.Rows[rowIndex].Selected = true;
-            advancedGrid.CurrentCell = advancedGrid.Rows[rowIndex].Cells[0];
+            AdvancedVariantDialogSupport.SelectGridRow(advancedGrid, rowIndex);
         }
 
         private void UpdateAdvancedLayerColumnChoices()
         {
-            for (int index = 0; index < advancedLayerColumns.Length; index++)
-            {
-                int count = index < advancedLayerCountControls.Length
-                    ? (int)advancedLayerCountControls[index].Value
-                    : 0;
-
-                string[] choices = new[] { string.Empty }
-                    .Concat(Enumerable.Range(1, count).Select(value => value.ToString()))
-                    .ToArray();
-                SetComboColumnChoices(advancedLayerColumns[index], choices);
-            }
-        }
-
-        private static void SetComboColumnChoices(DataGridViewComboBoxColumn column, IEnumerable<string> values)
-        {
-            column.Items.Clear();
-            foreach (var value in values)
-                column.Items.Add(value);
+            AdvancedVariantDialogSupport.UpdateLayerColumnChoices(advancedLayerColumns, advancedLayerCountControls);
         }
 
         private void NormalizeAdvancedRuleRowsForLayerCounts()
@@ -1410,14 +1196,7 @@ namespace Material_Editor.Dialogs
             suppressAdvancedRowEvents = true;
             try
             {
-                for (int index = 0; index < advancedRuleRows.Count; index++)
-                {
-                    var row = advancedRuleRows[index];
-                    row.Layer1MatchText = NormalizeLayerMatchText(row.Layer1MatchText, 0);
-                    row.Layer2MatchText = NormalizeLayerMatchText(row.Layer2MatchText, 1);
-                    row.Layer3MatchText = NormalizeLayerMatchText(row.Layer3MatchText, 2);
-                    row.Layer4MatchText = NormalizeLayerMatchText(row.Layer4MatchText, 3);
-                }
+                AdvancedVariantDialogSupport.NormalizeLayerMatchTexts(advancedRuleRows, advancedLayerCountControls);
             }
             finally
             {
@@ -1425,36 +1204,7 @@ namespace Material_Editor.Dialogs
             }
         }
 
-        private string NormalizeLayerMatchText(string value, int layerIndex)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return string.Empty;
-
-            int count = layerIndex < advancedLayerCountControls.Length
-                ? (int)advancedLayerCountControls[layerIndex].Value
-                : 0;
-
-            if (count <= 0)
-                return string.Empty;
-
-            if (int.TryParse(value, out int parsed) && parsed >= 1 && parsed <= count)
-                return parsed.ToString();
-
-            return string.Empty;
-        }
-
-        private string GetLayerColumnTooltipText(int zeroBasedLayerIndex)
-        {
-            int count = zeroBasedLayerIndex < advancedLayerCountControls.Length
-                ? (int)advancedLayerCountControls[zeroBasedLayerIndex].Value
-                : 0;
-
-            return count > 0
-                ? $"Choose 1-{count}, or leave blank to match any Layer {zeroBasedLayerIndex + 1} value."
-                : $"Leave blank while Layer {zeroBasedLayerIndex + 1} count is 0.";
-        }
-
-        private void UpdateAdvancedWarning(MaterialVariationOptions options, IReadOnlyList<AdvancedVariantResolvedContext> resolvedContexts)
+        private void UpdateAdvancedWarning(IReadOnlyList<AdvancedVariantResolvedContext> resolvedContexts)
         {
             if (!IsAdvancedMode)
             {
@@ -1463,9 +1213,13 @@ namespace Material_Editor.Dialogs
                 return;
             }
 
-            var unnamedContexts = resolvedContexts
-                .Where(context => context.Enabled && context.IndexTokFallback)
+            IReadOnlyList<AdvancedVariantResolvedContext> enabledContexts = resolvedContexts
+                .Where(context => context.Enabled)
                 .ToArray();
+            IReadOnlyList<string> tooltipLines = AdvancedVariantDialogSupport.BuildFallbackTooltipLines(
+                enabledContexts,
+                includeLayerTokenFallbacks: false,
+                out int fallbackContextCount);
 
             if (resolvedContexts.Count == 0)
             {
@@ -1474,27 +1228,15 @@ namespace Material_Editor.Dialogs
                 return;
             }
 
-            if (unnamedContexts.Length == 0)
+            if (fallbackContextCount == 0)
             {
                 advancedWarningLabel.Text = "0 variation(s) remain unnamed.";
                 advancedWarningToolTip.SetToolTip(advancedWarningLabel, string.Empty);
                 return;
             }
 
-            advancedWarningLabel.Text = $"{unnamedContexts.Length} variation(s) remain unnamed. They will fall back to numeric index values.";
-            advancedWarningToolTip.SetToolTip(
-                advancedWarningLabel,
-                string.Join(
-                    Environment.NewLine,
-                    unnamedContexts.Select(context => $"{BuildAdvancedLayerDescription(context)} -> {{indexTok}}={context.IndexTok}")));
-        }
-
-        private static string BuildAdvancedLayerDescription(AdvancedVariantResolvedContext context)
-        {
-            return string.Join(
-                ", ",
-                context.LayerIndices
-                    .Select((value, index) => $"Layer{index + 1}={value}"));
+            advancedWarningLabel.Text = $"{fallbackContextCount} variation(s) remain unnamed. They will fall back to numeric index values.";
+            advancedWarningToolTip.SetToolTip(advancedWarningLabel, string.Join(Environment.NewLine, tooltipLines));
         }
 
         private void OkButton_Click(object sender, EventArgs e)
@@ -1576,89 +1318,5 @@ namespace Material_Editor.Dialogs
             }
         }
 
-        private sealed class AdvancedRuleRow : INotifyPropertyChanged
-        {
-            private string layer1MatchText;
-            private string layer2MatchText;
-            private string layer3MatchText;
-            private string layer4MatchText;
-            private string indexTok;
-
-            public event PropertyChangedEventHandler PropertyChanged;
-
-            public string Layer1MatchText
-            {
-                get => layer1MatchText;
-                set => SetField(ref layer1MatchText, value ?? string.Empty, nameof(Layer1MatchText));
-            }
-
-            public string Layer2MatchText
-            {
-                get => layer2MatchText;
-                set => SetField(ref layer2MatchText, value ?? string.Empty, nameof(Layer2MatchText));
-            }
-
-            public string Layer3MatchText
-            {
-                get => layer3MatchText;
-                set => SetField(ref layer3MatchText, value ?? string.Empty, nameof(Layer3MatchText));
-            }
-
-            public string Layer4MatchText
-            {
-                get => layer4MatchText;
-                set => SetField(ref layer4MatchText, value ?? string.Empty, nameof(Layer4MatchText));
-            }
-
-            public string IndexTok
-            {
-                get => indexTok;
-                set => SetField(ref indexTok, value ?? string.Empty, nameof(IndexTok));
-            }
-
-            public bool HasMeaningfulContent =>
-                !string.IsNullOrWhiteSpace(Layer1MatchText)
-                || !string.IsNullOrWhiteSpace(Layer2MatchText)
-                || !string.IsNullOrWhiteSpace(Layer3MatchText)
-                || !string.IsNullOrWhiteSpace(Layer4MatchText)
-                || !string.IsNullOrWhiteSpace(IndexTok);
-
-            public AdvancedVariantRule ToRule(int sourceOrder)
-            {
-                return new AdvancedVariantRule
-                {
-                    Layer1Index = ParseLayerMatch(Layer1MatchText),
-                    Layer2Index = ParseLayerMatch(Layer2MatchText),
-                    Layer3Index = ParseLayerMatch(Layer3MatchText),
-                    Layer4Index = ParseLayerMatch(Layer4MatchText),
-                    IndexToken = NormalizeToken(IndexTok),
-                    SourceOrder = sourceOrder
-                };
-            }
-
-            private static int? ParseLayerMatch(string value)
-            {
-                return int.TryParse(value, out int parsed) ? parsed : null;
-            }
-
-            private static string NormalizeToken(string value)
-            {
-                return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-            }
-
-            private void SetField(ref string field, string value, string propertyName)
-            {
-                if (field == value)
-                    return;
-
-                field = value;
-                OnPropertyChanged(propertyName);
-            }
-
-            private void OnPropertyChanged(string propertyName)
-            {
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-            }
-        }
     }
 }

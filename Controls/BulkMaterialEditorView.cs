@@ -11,7 +11,7 @@ using System.Windows.Forms;
 
 namespace Material_Editor.Controls
 {
-    internal sealed class BulkMaterialEditorView : ThemeAwareUserControl
+    internal sealed partial class BulkMaterialEditorView : ThemeAwareUserControl
     {
         private static readonly IReadOnlyDictionary<string, string[]> VisibilityDrivenFieldMap =
             new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
@@ -200,12 +200,11 @@ namespace Material_Editor.Controls
             this.config = config;
             backupCheckBox.Checked = backupBeforeWrite;
             selectedLabelPreferences = BuildDefaultSelectedLabelPreferences(session);
-            selectedDescriptors = ResolveVisibleDescriptors(session, selectedLabelPreferences);
             invalidCellTexts.Clear();
             pendingBooleanOverrides.Clear();
             pendingDirtyRowPaths.Clear();
             Visible = true;
-            RebuildGrid();
+            RefreshVisibleDescriptorsAndGrid(refreshSummary: false);
             ApplyCurrentAppearance();
             RefreshSummary();
         }
@@ -229,7 +228,7 @@ namespace Material_Editor.Controls
         protected override void ApplyAppearance(AppearanceDefinition appearance)
         {
             this.theme = appearance.Theme;
-            AppearanceApplicator.ApplyToContainer(this, appearance, appearance.Theme.Palette.PanelBackground);
+            AppearanceApplicator.ApplyToContainer(this, appearance, appearance.Theme.Palette.FormBackground);
             validationLabel.ForeColor = string.IsNullOrEmpty(validationLabel.Text) ? appearance.Theme.Palette.Foreground : appearance.Theme.Semantics.Error;
             ApplyGridThemeStyles();
         }
@@ -246,9 +245,7 @@ namespace Material_Editor.Controls
                 return new BulkMaterialSessionAddResult();
 
             BulkMaterialSessionAddResult result = session.AddFiles(filePaths);
-            selectedDescriptors = ResolveVisibleDescriptors(session, selectedLabelPreferences);
-            RebuildGrid();
-            RefreshSummary();
+            RefreshVisibleDescriptorsAndGrid();
             return result;
         }
 
@@ -259,9 +256,7 @@ namespace Material_Editor.Controls
             foreach (BulkMaterialEditRow row in session?.Rows ?? Array.Empty<BulkMaterialEditRow>())
                 row.RefreshDynamicState();
 
-            selectedDescriptors = ResolveVisibleDescriptors(session, selectedLabelPreferences);
-            RebuildGrid();
-            RefreshSummary();
+            RefreshVisibleDescriptorsAndGrid();
         }
 
         public IReadOnlyList<FieldCopyResult> SaveAllChanges()
@@ -288,71 +283,6 @@ namespace Material_Editor.Controls
             ReselectRows(selectedRows.Select(row => row.FilePath));
             RefreshSummary();
             return results;
-        }
-
-        public void CommitPendingEdits()
-        {
-            if (session == null || grid.IsDisposed)
-                return;
-
-            if (grid.IsCurrentCellDirty)
-                grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
-
-            if (grid.IsCurrentCellInEditMode)
-                grid.EndEdit();
-
-            if (grid.CurrentCell?.OwningColumn is DataGridViewComboBoxColumn)
-                grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
-
-            bool gridChangedSession = false;
-            bool visibilityChanged = false;
-
-            foreach (((string filePath, string label) key, bool pendingValue) in pendingBooleanOverrides.ToArray())
-            {
-                BulkMaterialEditRow row = session.Rows.FirstOrDefault(candidate => string.Equals(candidate.FilePath, key.filePath, StringComparison.OrdinalIgnoreCase));
-                MaterialFieldDescriptor descriptor = selectedDescriptors.FirstOrDefault(candidate => string.Equals(candidate.Label, key.label, StringComparison.OrdinalIgnoreCase))
-                    ?? session.FindDescriptor(key.label);
-                if (row == null || descriptor == null)
-                    continue;
-
-                BulkMaterialEditCellState cell = row.GetCell(descriptor);
-                bool currentValue = cell.CurrentValue is bool currentBool && currentBool;
-                if (currentValue != pendingValue)
-                {
-                    if (!session.TrySetCellValue(row, descriptor, pendingValue, out _))
-                        continue;
-
-                    gridChangedSession = true;
-                    if (VisibilityDrivenFieldMap.ContainsKey(descriptor.Label))
-                    {
-                        row.RefreshDynamicState();
-                        visibilityChanged = true;
-                    }
-                }
-
-                pendingBooleanOverrides.Remove(key);
-                if (row.IsDirty)
-                    pendingDirtyRowPaths.Remove(row.FilePath);
-            }
-
-            if (!gridChangedSession)
-                return;
-
-            if (visibilityChanged)
-            {
-                selectedDescriptors = ResolveVisibleDescriptors(session, selectedLabelPreferences);
-                RebuildGrid();
-            }
-            else
-            {
-                for (int rowIndex = 0; rowIndex < grid.Rows.Count; rowIndex++)
-                {
-                    if (grid.Rows[rowIndex].Tag is BulkMaterialEditRow row)
-                        RefreshGridRow(rowIndex, row);
-                }
-            }
-
-            RefreshSummary();
         }
 
         public bool IsDirtyRow(BulkMaterialEditRow row)
@@ -383,8 +313,7 @@ namespace Material_Editor.Controls
             selectedLabelPreferences = new HashSet<string>(
                 dialog.SelectedFields.Select(descriptor => descriptor.Label),
                 StringComparer.OrdinalIgnoreCase);
-            selectedDescriptors = ResolveVisibleDescriptors(session, selectedLabelPreferences);
-            RebuildGrid();
+            RefreshVisibleDescriptorsAndGrid();
         }
 
         private void RebuildGrid()
@@ -513,9 +442,11 @@ namespace Material_Editor.Controls
             else if (isDirty)
                 gridRow.DefaultCellStyle.BackColor = GetDirtyRowBackColor();
             else
-                gridRow.DefaultCellStyle.BackColor = grid.DefaultCellStyle.BackColor;
+                gridRow.DefaultCellStyle.BackColor = Color.Empty;
 
-            gridRow.DefaultCellStyle.ForeColor = RequireTheme().Palette.Foreground;
+            gridRow.DefaultCellStyle.ForeColor = row.HasLoadError || row.HasValidationErrors || isDirty
+                ? ThemeApplicator.GetEditableForeground(RequireTheme())
+                : Color.Empty;
             gridRow.DefaultCellStyle.SelectionBackColor = grid.DefaultCellStyle.SelectionBackColor;
             gridRow.DefaultCellStyle.SelectionForeColor = grid.DefaultCellStyle.SelectionForeColor;
         }
@@ -614,7 +545,7 @@ namespace Material_Editor.Controls
                 textBox.BorderStyle = BorderStyle.FixedSingle;
                 ThemeDefinition currentTheme = RequireTheme();
                 textBox.BackColor = currentTheme.Palette.PanelBackground;
-                textBox.ForeColor = currentTheme.Palette.Foreground;
+                textBox.ForeColor = ThemeApplicator.GetEditableForeground(currentTheme);
                 return;
             }
 
@@ -623,7 +554,7 @@ namespace Material_Editor.Controls
                 ThemeDefinition currentTheme = RequireTheme();
                 comboBox.FlatStyle = FlatStyle.Flat;
                 comboBox.BackColor = currentTheme.Palette.ControlBackground;
-                comboBox.ForeColor = currentTheme.Palette.Foreground;
+                comboBox.ForeColor = ThemeApplicator.GetEditableForeground(currentTheme);
                 comboBox.DrawMode = DrawMode.OwnerDrawFixed;
                 comboBox.DrawItem -= ComboEditingControl_DrawItem;
                 comboBox.DrawItem += ComboEditingControl_DrawItem;
@@ -654,7 +585,7 @@ namespace Material_Editor.Controls
                     text,
                     comboBox.Font,
                     Rectangle.Inflate(e.Bounds, -2, 0),
-                    currentTheme.Palette.Foreground,
+                    ThemeApplicator.GetEditableForeground(currentTheme),
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             }
 
@@ -722,40 +653,8 @@ namespace Material_Editor.Controls
             string focusColumnName = GetFieldColumnName(descriptor.Label);
 
             object inputValue = inputValueOverride ?? gridCell.Value;
-            if (session.TrySetCellValue(row, descriptor, inputValue, out string errorMessage))
-            {
-                suppressGridEvents = true;
-                try
-                {
-                    invalidCellTexts.Remove((keyFilePath, descriptor.Label));
-                    gridCell.Value = row.GetCell(descriptor).GetGridValue();
-                    gridCell.ErrorText = string.Empty;
-                }
-                finally
-                {
-                    suppressGridEvents = false;
-                }
-            }
-            else
-            {
-                invalidCellTexts[(keyFilePath, descriptor.Label)] = Convert.ToString(gridCell.Value) ?? string.Empty;
-                gridCell.ErrorText = errorMessage ?? "Invalid value.";
-            }
-
-            RefreshGridRowState(grid.Rows[rowIndex], row);
-            RefreshSummary();
-
-            if (VisibilityDrivenFieldMap.ContainsKey(descriptor.Label))
-                row.RefreshDynamicState();
-
-            if (VisibilityDrivenFieldMap.ContainsKey(descriptor.Label)
-                && TryRefreshVisibilityDrivenColumns(selectedPaths, focusFilePath, focusColumnName))
-            {
-                return;
-            }
-
-            if (VisibilityDrivenFieldMap.ContainsKey(descriptor.Label))
-                RefreshGridRow(rowIndex, row);
+            TryApplyCellValue(row, descriptor, gridCell, inputValue, Convert.ToString(gridCell.Value) ?? string.Empty);
+            HandlePostEditRefresh(rowIndex, row, descriptor, selectedPaths, focusFilePath, focusColumnName);
         }
 
         private void RefreshSummary()
@@ -836,278 +735,6 @@ namespace Material_Editor.Controls
             return false;
         }
 
-        private static bool FieldHasMeaningfulData(IEnumerable<BulkMaterialEditRow> rows, MaterialFieldDescriptor descriptor)
-        {
-            foreach (BulkMaterialEditRow row in rows ?? Array.Empty<BulkMaterialEditRow>())
-            {
-                if (row.HasLoadError)
-                    continue;
-
-                if (row.Material == null || !descriptor.IsSupported(row.Material))
-                    continue;
-
-                if (!string.IsNullOrWhiteSpace(descriptor.FormatValue(descriptor.GetValue(row.Material))))
-                    return true;
-            }
-
-            return false;
-        }
-
-        private static List<MaterialFieldDescriptor> ResolveVisibleDescriptors(BulkMaterialEditSession session, IReadOnlyCollection<string> selectedLabels)
-        {
-            if (session == null)
-                return new List<MaterialFieldDescriptor>();
-
-            var selected = new HashSet<string>(selectedLabels ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
-            var effectiveLabels = new HashSet<string>(selected, StringComparer.OrdinalIgnoreCase);
-
-            foreach ((string controllerLabel, string[] dependentLabels) in VisibilityDrivenFieldMap)
-            {
-                if (!selected.Contains(controllerLabel) || !FieldIsEnabledInAnyRow(session.Rows, controllerLabel))
-                    continue;
-
-                foreach (string dependentLabel in dependentLabels)
-                    effectiveLabels.Add(dependentLabel);
-            }
-
-            var visibleDescriptors = session.AllDescriptors
-                .Where(descriptor => effectiveLabels.Contains(descriptor.Label))
-                .Where(descriptor => FieldIsSupportedInAnyRow(session.Rows, descriptor))
-                .ToList();
-
-            return visibleDescriptors.Count > 0
-                ? visibleDescriptors
-                : session.AllDescriptors
-                    .Where(descriptor => !AutoManagedFieldLabels.Contains(descriptor.Label))
-                    .ToList();
-        }
-
-        private static bool FieldIsEnabledInAnyRow(IEnumerable<BulkMaterialEditRow> rows, string controllerLabel)
-        {
-            foreach (BulkMaterialEditRow row in rows ?? Array.Empty<BulkMaterialEditRow>())
-            {
-                if (row.HasLoadError)
-                    continue;
-
-                MaterialFieldDescriptor descriptor = row.Cells
-                    .Select(cell => cell.Descriptor)
-                    .FirstOrDefault(cellDescriptor => string.Equals(cellDescriptor.Label, controllerLabel, StringComparison.OrdinalIgnoreCase));
-                if (descriptor == null || row.Material == null || !descriptor.IsSupported(row.Material))
-                    continue;
-
-                if (descriptor.GetValue(row.Material) is bool isEnabled && isEnabled)
-                    return true;
-            }
-
-            return false;
-        }
-
-        private bool TryRefreshVisibilityDrivenColumns(IReadOnlyCollection<string> selectedPaths, string focusFilePath, string focusColumnName)
-        {
-            List<MaterialFieldDescriptor> resolvedDescriptors = ResolveVisibleDescriptors(session, selectedLabelPreferences);
-            if (resolvedDescriptors.Select(descriptor => descriptor.Label).SequenceEqual(
-                    selectedDescriptors.Select(descriptor => descriptor.Label),
-                    StringComparer.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            selectedDescriptors = resolvedDescriptors;
-            RebuildGrid();
-            ReselectRows(selectedPaths);
-            RestoreCurrentCell(focusFilePath, focusColumnName);
-            RefreshSummary();
-            return true;
-        }
-
-        private void RestoreCurrentCell(string focusFilePath, string focusColumnName)
-        {
-            if (string.IsNullOrWhiteSpace(focusFilePath) || string.IsNullOrWhiteSpace(focusColumnName))
-                return;
-
-            if (!grid.Columns.Contains(focusColumnName))
-                return;
-
-            foreach (DataGridViewRow gridRow in grid.Rows)
-            {
-                if (gridRow.Tag is not BulkMaterialEditRow row
-                    || !string.Equals(row.FilePath, focusFilePath, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                grid.CurrentCell = gridRow.Cells[focusColumnName];
-                CenterCurrentCellColumn();
-                return;
-            }
-        }
-
-        private void RefreshGridRow(int rowIndex, BulkMaterialEditRow row)
-        {
-            if (rowIndex < 0 || rowIndex >= grid.Rows.Count || row == null)
-                return;
-
-            suppressGridEvents = true;
-            try
-            {
-                PopulateGridRow(grid.Rows[rowIndex], row);
-            }
-            finally
-            {
-                suppressGridEvents = false;
-            }
-        }
-
-        private bool TryToggleBooleanCell(int rowIndex, int columnIndex, KeyEventArgs keyEventArgs = null)
-        {
-            if (session == null || rowIndex < 0 || columnIndex < 0)
-                return false;
-
-            MaterialFieldDescriptor descriptor = TryGetFieldDescriptor(grid.Columns[columnIndex].Name);
-            if (descriptor?.EditorKind != BulkFieldEditorKind.Boolean)
-                return false;
-
-            if (grid.Rows[rowIndex].Tag is not BulkMaterialEditRow row)
-                return false;
-
-            DataGridViewCell gridCell = grid.Rows[rowIndex].Cells[columnIndex];
-            if (gridCell.ReadOnly)
-                return false;
-
-            bool currentValue = row.GetCell(descriptor).CurrentValue is bool boolValue && boolValue;
-            bool nextValue = !currentValue;
-            string keyFilePath = row.FilePath;
-            pendingDirtyRowPaths.Add(keyFilePath);
-            pendingBooleanOverrides[(keyFilePath, descriptor.Label)] = nextValue;
-            string[] selectedPaths = SelectedRows.Select(selectedRow => selectedRow.FilePath).ToArray();
-            string focusFilePath = row.FilePath;
-            string focusColumnName = GetFieldColumnName(descriptor.Label);
-
-            suppressGridEvents = true;
-            try
-            {
-                grid.CurrentCell = gridCell;
-
-                if (session.TrySetCellValue(row, descriptor, nextValue, out string errorMessage))
-                {
-                    invalidCellTexts.Remove((keyFilePath, descriptor.Label));
-                    gridCell.Value = row.GetCell(descriptor).GetGridValue();
-                    gridCell.ErrorText = string.Empty;
-                }
-                else
-                {
-                    invalidCellTexts[(keyFilePath, descriptor.Label)] = Convert.ToString(nextValue) ?? string.Empty;
-                    gridCell.ErrorText = errorMessage ?? "Invalid value.";
-                    return false;
-                }
-            }
-            finally
-            {
-                suppressGridEvents = false;
-            }
-
-            RefreshGridRowState(grid.Rows[rowIndex], row);
-            RefreshSummary();
-
-            if (VisibilityDrivenFieldMap.ContainsKey(descriptor.Label))
-                row.RefreshDynamicState();
-
-            if (VisibilityDrivenFieldMap.ContainsKey(descriptor.Label)
-                && TryRefreshVisibilityDrivenColumns(selectedPaths, focusFilePath, focusColumnName))
-            {
-                if (keyEventArgs != null)
-                {
-                    keyEventArgs.Handled = true;
-                    keyEventArgs.SuppressKeyPress = true;
-                }
-
-                return true;
-            }
-
-            if (VisibilityDrivenFieldMap.ContainsKey(descriptor.Label))
-                RefreshGridRow(rowIndex, row);
-
-            if (keyEventArgs != null)
-            {
-                keyEventArgs.Handled = true;
-                keyEventArgs.SuppressKeyPress = true;
-            }
-
-            return true;
-        }
-
-        private static bool GetBooleanCellValue(DataGridViewCell gridCell)
-        {
-            if (gridCell == null)
-                return false;
-
-            return TryConvertToBoolean(gridCell.Value, out bool value)
-                || TryConvertToBoolean(gridCell.EditedFormattedValue, out value)
-                || TryConvertToBoolean(gridCell.FormattedValue, out value)
-                ? value
-                : false;
-        }
-
-        private static bool TryConvertToBoolean(object value, out bool result)
-        {
-            switch (value)
-            {
-                case bool boolValue:
-                    result = boolValue;
-                    return true;
-                case CheckState checkState:
-                    result = checkState == CheckState.Checked;
-                    return true;
-                case string text when bool.TryParse(text, out bool parsed):
-                    result = parsed;
-                    return true;
-                case null:
-                    result = false;
-                    return false;
-            }
-
-            try
-            {
-                result = Convert.ToBoolean(value, CultureInfo.InvariantCulture);
-                return true;
-            }
-            catch
-            {
-                result = false;
-                return false;
-            }
-        }
-
-        private bool IsRowEffectivelyDirty(BulkMaterialEditRow row)
-        {
-            if (row == null)
-                return false;
-
-            if (pendingDirtyRowPaths.Contains(row.FilePath))
-                return true;
-
-            if (row.IsDirty)
-                return true;
-
-            foreach ((string filePath, string label) in pendingBooleanOverrides.Keys)
-            {
-                if (!string.Equals(filePath, row.FilePath, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                MaterialFieldDescriptor descriptor = session?.FindDescriptor(label);
-                if (descriptor == null)
-                    continue;
-
-                object originalValue = row.GetCell(descriptor).OriginalValue;
-                bool pendingValue = pendingBooleanOverrides[(filePath, label)];
-                bool originalBooleanValue = originalValue is bool boolValue && boolValue;
-                if (pendingValue != originalBooleanValue)
-                    return true;
-            }
-
-            return false;
-        }
-
         private void CenterCurrentCellColumn()
         {
             if (grid.CurrentCell == null || grid.CurrentCell.ColumnIndex < 0)
@@ -1178,13 +805,13 @@ namespace Material_Editor.Controls
         {
             ThemeDefinition currentTheme = RequireTheme();
             grid.BackgroundColor = currentTheme.Palette.PanelBackground;
-            grid.GridColor = currentTheme.Palette.Accent.IsEmpty ? currentTheme.Palette.Foreground : currentTheme.Palette.Accent;
+            grid.GridColor = ThemeApplicator.GetTableBorderColor(currentTheme);
             grid.DefaultCellStyle.BackColor = currentTheme.Palette.PanelBackground;
-            grid.DefaultCellStyle.ForeColor = currentTheme.Palette.Foreground;
+            grid.DefaultCellStyle.ForeColor = ThemeApplicator.GetEditableForeground(currentTheme);
             grid.DefaultCellStyle.SelectionBackColor = currentTheme.Palette.Accent.IsEmpty ? currentTheme.Palette.MenuBackground : currentTheme.Palette.Accent;
-            grid.DefaultCellStyle.SelectionForeColor = currentTheme.Palette.Foreground;
+            grid.DefaultCellStyle.SelectionForeColor = ThemeApplicator.GetEditableForeground(currentTheme);
             grid.AlternatingRowsDefaultCellStyle.BackColor = ThemeApplicator.GetAlternatingRowBackground(currentTheme);
-            grid.AlternatingRowsDefaultCellStyle.ForeColor = currentTheme.Palette.Foreground;
+            grid.AlternatingRowsDefaultCellStyle.ForeColor = ThemeApplicator.GetEditableForeground(currentTheme);
             grid.AlternatingRowsDefaultCellStyle.SelectionBackColor = grid.DefaultCellStyle.SelectionBackColor;
             grid.AlternatingRowsDefaultCellStyle.SelectionForeColor = grid.DefaultCellStyle.SelectionForeColor;
 
@@ -1196,7 +823,7 @@ namespace Material_Editor.Controls
                 if (column.Name is DirtyColumnName or VersionColumnName or PathColumnName)
                 {
                     column.DefaultCellStyle.BackColor = ThemeApplicator.GetFrozenColumnBackground(currentTheme);
-                    column.DefaultCellStyle.ForeColor = currentTheme.Palette.Foreground;
+                    column.DefaultCellStyle.ForeColor = ThemeApplicator.GetEditableForeground(currentTheme);
                 }
             }
 
@@ -1226,7 +853,7 @@ namespace Material_Editor.Controls
             {
                 ThemeDefinition currentTheme = RequireTheme();
                 gridCell.Style.BackColor = GetReadOnlyCellBackColor();
-                gridCell.Style.ForeColor = currentTheme.Palette.Foreground;
+                gridCell.Style.ForeColor = ThemeApplicator.GetEditableForeground(currentTheme);
                 gridCell.Style.SelectionBackColor = grid.DefaultCellStyle.SelectionBackColor;
                 gridCell.Style.SelectionForeColor = grid.DefaultCellStyle.SelectionForeColor;
                 return;

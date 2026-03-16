@@ -8,6 +8,7 @@ namespace Material_Editor.Models
         public Game GameVersion;
         public Font Font;
         public string ThemeId;
+        public bool ShowSplashAnimation = true;
         public BulkDirtyRemoveBehavior BulkDirtyRemoveBehavior;
         public List<BulkFieldPreset> BulkFieldPresets = new();
     }

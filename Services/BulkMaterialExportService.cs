@@ -32,20 +32,12 @@ namespace Material_Editor.Services
                     continue;
                 }
 
-                try
-                {
-                    string directory = Path.GetDirectoryName(item.NormalizedPath);
-                    if (!string.IsNullOrWhiteSpace(directory))
-                        Directory.CreateDirectory(directory);
-
-                    BaseMaterialFile clone = MaterialFileCloner.Clone(item.Row.Material);
-                    MaterialFilePersistence.SaveMaterial(item.NormalizedPath, clone, serializeAsJson);
-                    results.Add(new FieldCopyResult(item.NormalizedPath, FieldCopyStatus.Success, "Exported successfully."));
-                }
-                catch (Exception ex)
-                {
-                    results.Add(new FieldCopyResult(item.NormalizedPath ?? item.TargetPath ?? string.Empty, FieldCopyStatus.Failed, ex.Message));
-                }
+                BaseMaterialFile clone = MaterialFileCloner.Clone(item.Row.Material);
+                results.Add(MaterialFilePersistence.SaveMaterialResult(
+                    item.NormalizedPath ?? item.TargetPath ?? string.Empty,
+                    clone,
+                    serializeAsJson,
+                    "Exported successfully."));
             }
 
             return results;
@@ -84,34 +76,14 @@ namespace Material_Editor.Services
 
         private static void FinalizeWorkItems(IReadOnlyList<ExportWorkItem> workItems)
         {
-            foreach (ExportWorkItem item in workItems)
-            {
-                if (string.IsNullOrWhiteSpace(item.TargetPath))
-                {
-                    item.ValidationError = "Output pattern resolved to an empty path.";
-                    continue;
-                }
-
-                try
-                {
-                    item.NormalizedPath = Path.GetFullPath(item.TargetPath);
-                }
-                catch (Exception ex)
-                {
-                    item.ValidationError = $"Invalid output path: {ex.Message}";
-                }
-            }
-
-            var duplicates = workItems
-                .Where(item => string.IsNullOrWhiteSpace(item.ValidationError))
-                .GroupBy(item => item.NormalizedPath, StringComparer.OrdinalIgnoreCase)
-                .Where(group => group.Count() > 1);
-
-            foreach (var duplicateGroup in duplicates)
-            {
-                foreach (ExportWorkItem item in duplicateGroup)
-                    item.ValidationError = "Duplicate output path.";
-            }
+            MaterialFilePersistence.FinalizeOutputPaths(
+                workItems,
+                item => item.TargetPath,
+                item => item.ValidationError,
+                (item, normalizedPath) => item.NormalizedPath = normalizedPath,
+                (item, error) => item.ValidationError = error,
+                item => item.NormalizedPath,
+                "Duplicate output path.");
         }
 
         private sealed class ExportWorkItem

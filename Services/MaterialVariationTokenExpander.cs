@@ -1,8 +1,6 @@
 using Material_Editor.AdvancedVariant;
 using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Material_Editor.Services
@@ -11,21 +9,6 @@ namespace Material_Editor.Services
     {
         private static readonly Regex LegacyIndexPlaceholderRegex = new(@"\{index(?:\:([^\}]+))?\}", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex AdvancedTokenRegex = new(@"(?:\{|\()(?<name>indexNN|indexTok|index)(?<layer>Layer[1-4])?(?:\}|\))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-        internal readonly struct AdvancedTokenReference
-        {
-            public AdvancedTokenReference(string tokenName, int? layerNumber)
-            {
-                TokenName = tokenName;
-                LayerNumber = layerNumber;
-            }
-
-            public string TokenName { get; }
-            public int? LayerNumber { get; }
-            public string TokenKey => LayerNumber.HasValue
-                ? TokenName + "Layer" + LayerNumber.Value.ToString(CultureInfo.InvariantCulture)
-                : TokenName;
-        }
 
         public static bool ContainsLegacyIndexPlaceholder(string pattern)
         {
@@ -38,6 +21,14 @@ namespace Material_Editor.Services
         public static string ExpandLegacy(string pattern, int index)
         {
             return ExpandCore(pattern, index, null);
+        }
+
+        public static string ReplaceLegacyIndexPlaceholders(string pattern, string replacement)
+        {
+            if (string.IsNullOrEmpty(pattern))
+                return pattern;
+
+            return LegacyIndexPlaceholderRegex.Replace(pattern, replacement ?? string.Empty);
         }
 
         public static string Expand(string pattern, int? legacyIndex, AdvancedVariantResolvedContext context)
@@ -106,19 +97,6 @@ namespace Material_Editor.Services
                 }
             });
         }
-
-        internal static IReadOnlyList<AdvancedTokenReference> GetAdvancedTokenReferences(string pattern)
-        {
-            if (string.IsNullOrWhiteSpace(pattern))
-                return Array.Empty<AdvancedTokenReference>();
-
-            return AdvancedTokenRegex.Matches(pattern)
-                .Select(match => new AdvancedTokenReference(
-                    match.Groups["name"].Value,
-                    GetLayerNumber(match.Groups["layer"].Value)))
-                .ToArray();
-        }
-
         private static int? GetLayerNumber(string layerGroupValue)
         {
             if (string.IsNullOrWhiteSpace(layerGroupValue))
