@@ -41,6 +41,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="assets\bgem.ico" LogicalName="Material_Editor.assets.bgem.ico" />
+    <EmbeddedResource Include="assets\B.gif" LogicalName="Material_Editor.assets.B.gif" />
   </ItemGroup>
 
   <ItemGroup>

@@ -31,7 +31,7 @@ namespace Material_Editor
                         MessageBoxIcon.Warning);
                 }
 
-                Application.Run(new Material_Editor.Forms.Main(config));
+                Application.Run(new StartupApplicationContext(config));
             }
             catch (Exception ex)
             {
