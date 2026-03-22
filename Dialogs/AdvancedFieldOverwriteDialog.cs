@@ -53,6 +53,7 @@ namespace Material_Editor.Dialogs
 
         private bool suppressRefresh;
         private bool suppressAdvancedRowEvents;
+        private string advancedResolutionError = string.Empty;
 
         public AdvancedFieldOverwriteDialog(
             BaseMaterialFile sourceState,
@@ -211,7 +212,7 @@ namespace Material_Editor.Dialogs
             var advancedHelpLabel = new Label
             {
                 AutoSize = true,
-                Text = "Use layered naming rules like Generate Variations. Patterns can use {index}, {indexNN}, {indexTok}, {indexLayer1}, {indexNNLayer1}, and {indexTokLayer1}.",
+                Text = $"Use layered naming rules like Generate Variations. Patterns can use {{index}}, {{indexNN}}, {{indexTok}}, {{indexLayer1}}, {{indexNNLayer1}}, and {{indexTokLayer1}}. Advanced mode is limited to {AdvancedVariantEngine.MaxResolvedContextCount:N0} resolved contexts.",
                 Margin = new Padding(0, 0, 0, 6)
             };
             advancedLayout.Controls.Add(advancedHelpLabel, 0, 1);
@@ -794,7 +795,7 @@ namespace Material_Editor.Dialogs
             try
             {
                 var options = CreateOptions();
-                var advancedContexts = IterativeFieldOverwritePlanner.ResolveAdvancedContexts(options.AdvancedVariant);
+                var advancedContexts = ResolveAdvancedContexts(options.AdvancedVariant);
                 var contexts = IterativeFieldOverwritePlanner.BuildContexts(
                     MaterialFileTypeHelper.GetMaterialType(sourceState),
                     targetFiles,
@@ -862,6 +863,9 @@ namespace Material_Editor.Dialogs
             if (selectedByIterationCount == 0)
                 return "Iteration settings do not select any compatible target files.";
 
+            if (!string.IsNullOrWhiteSpace(advancedResolutionError))
+                return advancedResolutionError;
+
             if (advancedContexts.Count == 0)
                 return "Advanced variant layers must generate at least one context.";
 
@@ -873,6 +877,35 @@ namespace Material_Editor.Dialogs
                 return "All selected targets are disabled. Re-enable at least one Apply checkbox to continue.";
 
             return string.Empty;
+        }
+
+        private IReadOnlyList<AdvancedVariantResolvedContext> ResolveAdvancedContexts(AdvancedVariantOptions options)
+        {
+            if (options == null || options.Layers == null || options.Layers.Count == 0)
+            {
+                advancedResolutionError = string.Empty;
+                return Array.Empty<AdvancedVariantResolvedContext>();
+            }
+
+            IReadOnlyList<AdvancedVariantValidationIssue> issues = AdvancedVariantEngine.Validate(options);
+            if (issues.Count > 0)
+            {
+                advancedResolutionError = issues[0].Message;
+                return Array.Empty<AdvancedVariantResolvedContext>();
+            }
+
+            try
+            {
+                advancedResolutionError = string.Empty;
+                return AdvancedVariantEngine.Resolve(options)
+                    .Where(context => context.Enabled)
+                    .ToArray();
+            }
+            catch (Exception ex)
+            {
+                advancedResolutionError = ex.Message;
+                return Array.Empty<AdvancedVariantResolvedContext>();
+            }
         }
 
         private IterativeFieldOverwriteOptions CreateOptions()
@@ -1156,7 +1189,7 @@ namespace Material_Editor.Dialogs
         private void OkButton_Click(object sender, EventArgs e)
         {
             var options = CreateOptions();
-            var advancedContexts = IterativeFieldOverwritePlanner.ResolveAdvancedContexts(options.AdvancedVariant);
+            var advancedContexts = ResolveAdvancedContexts(options.AdvancedVariant);
             var contexts = IterativeFieldOverwritePlanner.BuildContexts(
                 MaterialFileTypeHelper.GetMaterialType(sourceState),
                 targetFiles,

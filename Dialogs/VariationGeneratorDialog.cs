@@ -61,6 +61,7 @@ namespace Material_Editor.Dialogs
 
         private bool suppressAdvancedRowEvents;
         private IReadOnlyList<AdvancedVariantResolvedContext> advancedResolvedContexts = Array.Empty<AdvancedVariantResolvedContext>();
+        private string advancedResolutionError = string.Empty;
 
         public VariationGeneratorDialog(
             IReadOnlyList<MaterialFieldDescriptor> descriptors,
@@ -859,7 +860,7 @@ namespace Material_Editor.Dialogs
                 : "Use {index} or {index:00}. Example: armor_{index:00}.bgsm";
 
             indexHelpLabel.Text = IsAdvancedMode
-                ? "Enter counts for up to 4 layers. Each non-zero layer generates indices 1 through its count."
+                ? $"Enter counts for up to 4 layers. Each non-zero layer generates indices 1 through its count. Advanced mode is limited to {AdvancedVariantEngine.MaxResolvedContextCount:N0} resolved variations."
                 : "Example: start 1, count 12, step 1 generates 1 through 12.";
 
             advancedHelpLabel.Text = "Add rules from broad to specific. Blank layer cells are wildcards, and later rows win when specificity is equal.";
@@ -980,6 +981,9 @@ namespace Material_Editor.Dialogs
                 if (options.AdvancedVariant == null || options.AdvancedVariant.Layers.Count == 0)
                     return "Enter at least one non-zero layer count for Advanced mode.";
 
+                if (!string.IsNullOrWhiteSpace(advancedResolutionError))
+                    return advancedResolutionError;
+
                 if (advancedResolvedContexts.Count == 0 || !advancedResolvedContexts.Any(context => context.Enabled))
                     return "Enable at least one resolved advanced row before generating.";
             }
@@ -1076,16 +1080,34 @@ namespace Material_Editor.Dialogs
         private IReadOnlyList<AdvancedVariantResolvedContext> ResolveAdvancedContexts(MaterialVariationOptions options)
         {
             if (!IsAdvancedMode)
+            {
+                advancedResolutionError = string.Empty;
                 return Array.Empty<AdvancedVariantResolvedContext>();
+            }
+
+            if (options.AdvancedVariant == null)
+            {
+                advancedResolutionError = string.Empty;
+                return Array.Empty<AdvancedVariantResolvedContext>();
+            }
+
+            IReadOnlyList<AdvancedVariantValidationIssue> issues = AdvancedVariantEngine.Validate(options.AdvancedVariant);
+            if (issues.Count > 0)
+            {
+                advancedResolutionError = issues[0].Message;
+                return Array.Empty<AdvancedVariantResolvedContext>();
+            }
 
             try
             {
+                advancedResolutionError = string.Empty;
                 return options.AdvancedVariant == null
                     ? Array.Empty<AdvancedVariantResolvedContext>()
                     : AdvancedVariantEngine.Resolve(options.AdvancedVariant).ToArray();
             }
-            catch
+            catch (Exception ex)
             {
+                advancedResolutionError = ex.Message;
                 return Array.Empty<AdvancedVariantResolvedContext>();
             }
         }

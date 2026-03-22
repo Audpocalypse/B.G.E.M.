@@ -1,6 +1,7 @@
 using MaterialLib;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Configuration;
 using System.Drawing;
 using System.Globalization;
@@ -29,6 +30,8 @@ namespace Material_Editor.Forms
 
         private BaseMaterialFile currentMaterial;
         private BaseMaterialFile originalMaterial;
+        private BaseMaterialFile pendingSingleEditorAppearanceRebuildMaterial;
+        private bool forceSingleEditorControlRebuild;
         private readonly Dictionary<CollapsibleGroupBox, string[]> sectionVisibilityMap = [];
         private CollapsibleGroupBox generalPageSection;
         private CollapsibleGroupBox materialPageSection;
@@ -112,6 +115,7 @@ namespace Material_Editor.Forms
             config.ThemeId = AppearanceService.CurrentAppearance.Theme.Id;
             config.Font = AppearanceService.CurrentAppearance.Font;
             InitializeComponent();
+            InitializeSingleEditorLoadingOverlay();
             MinimumSize = new Size(MinimumEditorWidth, MinimumEditorHeight);
             Size = new Size(MinimumEditorWidth, MinimumEditorHeight);
             InitializeBulkShell();
@@ -222,27 +226,11 @@ namespace Material_Editor.Forms
             {
                 config.GameVersion = selectedGame;
 
-                if (currentMaterial != null)
-                {
-                    switch (selectedGame)
-                    {
-                        case Game.FO4:
-                            if (currentMaterial.Version > 2)
-                                currentMaterial.Version = DefaultVersionFO4;
-                            break;
-                        case Game.FO76:
-                            if (currentMaterial.Version <= 2)
-                                currentMaterial.Version = DefaultVersionFO76;
-                            break;
-                    }
-                }
-
                 SuspendAll();
                 FillVersionDropdown();
-                ControlFactory.UpdateVisibility();
+                if (currentMaterial != null)
+                    ControlFactory.UpdateVisibility();
                 ResumeAll();
-
-                OnChanged();
             }
 
             ApplyCurrentAppearance();
@@ -252,6 +240,14 @@ namespace Material_Editor.Forms
         {
             if (sender is not RadioButton radioButton || !radioButton.Checked)
                 return;
+
+            MaterialType selectedType = CurrentMaterialType;
+            if (IsSingleMode
+                && currentMaterial != null
+                && MaterialFileTypeHelper.GetMaterialType(currentMaterial) != selectedType)
+            {
+                RebuildSingleEditorForMaterialType(selectedType);
+            }
 
             UpdateTopLevelSectionVisibility();
 
@@ -268,14 +264,19 @@ namespace Material_Editor.Forms
         private void ListVersion_SelectedIndexChanged(object sender, EventArgs e)
         {
             var selectedVersion = listVersion.SelectedItem;
-            if (selectedVersion != null && currentMaterial != null)
-                currentMaterial.Version = Convert.ToUInt32(selectedVersion);
+            if (selectedVersion == null || currentMaterial == null || !TryGetVersionValue(selectedVersion, out uint version))
+                return;
+
+            bool versionChanged = currentMaterial.Version != version;
+            if (versionChanged)
+                currentMaterial.Version = version;
 
             SuspendAll();
             ControlFactory.UpdateVisibility();
             ResumeAll();
 
-            OnChanged();
+            if (versionChanged)
+                OnChanged();
         }
 
         private void FillVersionDropdown()

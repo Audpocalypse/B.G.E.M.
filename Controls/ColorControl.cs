@@ -80,5 +80,12 @@ namespace Material_Editor.Controls
         {
             return btColor.BackColor;
         }
+
+        public override void SetProperty(object value)
+        {
+            CurrentColor = value is Color color ? color : Color.White;
+            btColor.BackColor = CurrentColor;
+            colorDialog.Color = CurrentColor;
+        }
     }
 }

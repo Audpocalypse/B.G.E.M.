@@ -10,6 +10,7 @@ namespace Material_Editor.Controls
         private Button btFile;
         private OpenFileDialog textureFileDialog;
         private OpenFileDialog materialFileDialog;
+        private bool suppressChanged;
 
         public enum FileType
         {
@@ -89,6 +90,9 @@ namespace Material_Editor.Controls
 
         private void TbFile_TextChanged(object sender, EventArgs e)
         {
+            if (suppressChanged)
+                return;
+
             InvokeChangedCallback();
         }
 
@@ -155,6 +159,19 @@ namespace Material_Editor.Controls
         public override object GetProperty()
         {
             return tbFile.Text;
+        }
+
+        public override void SetProperty(object value)
+        {
+            suppressChanged = true;
+            try
+            {
+                tbFile.Text = value?.ToString() ?? string.Empty;
+            }
+            finally
+            {
+                suppressChanged = false;
+            }
         }
 
         internal override void ApplyAppearance(AppearanceDefinition appearance)

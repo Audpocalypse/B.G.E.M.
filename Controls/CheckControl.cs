@@ -8,6 +8,7 @@ namespace Material_Editor.Controls
     {
         private Label lbLabel;
         private ColorToggleCheckBox check;
+        private bool suppressChanged;
 
         public override Label LabelControl
         {
@@ -56,6 +57,9 @@ namespace Material_Editor.Controls
             var check = sender as ColorToggleCheckBox;
             UpdateCheckVisual(check);
 
+            if (suppressChanged)
+                return;
+
             InvokeChangedCallback();
         }
 
@@ -71,6 +75,20 @@ namespace Material_Editor.Controls
         public override object GetProperty()
         {
             return check.Checked;
+        }
+
+        public override void SetProperty(object value)
+        {
+            suppressChanged = true;
+            try
+            {
+                check.Checked = value != null && Convert.ToBoolean(value);
+                UpdateCheckVisual(check);
+            }
+            finally
+            {
+                suppressChanged = false;
+            }
         }
     }
 }

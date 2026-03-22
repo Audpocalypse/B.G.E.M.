@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows.Forms;
 using Material_Editor.Controls;
 using Material_Editor.Models;
+using Material_Editor.Theming;
 
 namespace Material_Editor.Forms
 {
@@ -64,6 +65,11 @@ namespace Material_Editor.Forms
                 return false;
 
             return Convert.ToBoolean(property);
+        }
+
+        private static bool IsControlEnabled(string controlName)
+        {
+            return ControlFactory.GetProperty(controlName, out var property) && Convert.ToBoolean(property);
         }
 
         private void PrepareFlatEditorLayout(TableLayoutPanel layout)
@@ -312,7 +318,7 @@ namespace Material_Editor.Forms
                     ControlNames.AnisoLighting,
                     ControlNames.GrayscaleToPaletteScale,
                     ControlNames.SkewSpecularAlpha),
-                new SectionDefinition("Lighting / Emittance", 2, true, true,
+                new SectionDefinition("Lighting", 2, true, true,
                     ControlNames.RimLighting,
                     ControlNames.RimPower,
                     ControlNames.BackLighting,
@@ -324,12 +330,14 @@ namespace Material_Editor.Forms
                     ControlNames.TranslucencyAlbSubsurfColor,
                     ControlNames.TranslucencySubsurfaceColor,
                     ControlNames.TranslucencyTransmissiveScale,
-                    ControlNames.TranslucencyTurbulence,
+                    ControlNames.TranslucencyTurbulence),
+                new SectionDefinition("Emittance", 2, true, true,
                     ControlNames.EmittanceEnabled,
                     ControlNames.ExternalEmittance,
                     ControlNames.EmittanceColor,
                     ControlNames.EmittanceMultiplier,
-                    ControlNames.LumEmittance,
+                    ControlNames.LumEmittance),
+                new SectionDefinition("Adaptive Emissive", 2, true, true,
                     ControlNames.AdaptativeEmissive,
                     ControlNames.AdaptEmissiveExposureOffset,
                     ControlNames.AdaptEmissiveFinalExposureMin,
@@ -354,23 +362,26 @@ namespace Material_Editor.Forms
                     ControlNames.HideSecret,
                     ControlNames.DissolveFade,
                     ControlNames.Glowmap),
-                new SectionDefinition("Special Shader Features", 2, true, true,
-                    ControlNames.Hair,
+                new SectionDefinition("Shader Features", 2, true, true,
                     ControlNames.Facegen,
                     ControlNames.SkinTint,
                     ControlNames.Tree,
                     ControlNames.EnvironmentMapWindow,
                     ControlNames.EnvironmentMapEye,
-                    ControlNames.Tessellate,
-                    ControlNames.HairTintColor,
                     ControlNames.PBR,
                     ControlNames.CustomPorosity,
-                    ControlNames.PorosityValue,
+                    ControlNames.PorosityValue),
+                new SectionDefinition("Hair", 2, true, true,
+                    ControlNames.Hair,
+                    ControlNames.HairTintColor),
+                new SectionDefinition("Tessellation", 2, true, true,
+                    ControlNames.Tessellate,
                     ControlNames.DisplacementTexBias,
                     ControlNames.DisplacementTexScale,
                     ControlNames.TessellationPNScale,
                     ControlNames.TessellationBaseFactor,
-                    ControlNames.TessellationFadeDistance,
+                    ControlNames.TessellationFadeDistance),
+                new SectionDefinition("Terrain", 2, true, true,
                     ControlNames.Terrain,
                     ControlNames.UnkInt1BGSM,
                     ControlNames.TerrainThresholdFalloff,
@@ -408,22 +419,24 @@ namespace Material_Editor.Forms
                     ControlNames.EmitColor,
                     ControlNames.LightingInfluence,
                     ControlNames.EnvmapMinLOD),
-                new SectionDefinition("Falloff / Softness", 2, true, true,
+                new SectionDefinition("Falloff", 2, true, true,
                     ControlNames.FalloffEnabled,
                     ControlNames.FalloffColorEnabled,
                     ControlNames.FalloffStartAngle,
                     ControlNames.FalloffStopAngle,
                     ControlNames.FalloffStartOpacity,
-                    ControlNames.FalloffStopOpacity,
+                    ControlNames.FalloffStopOpacity),
+                new SectionDefinition("Softness", 2, true, true,
                     ControlNames.SoftEnabled,
                     ControlNames.SoftDepth),
             };
 
             var rightSections = new[]
             {
-                new SectionDefinition("Environment / Glass", 2, true, true,
+                new SectionDefinition("Environment Mapping", 2, true, true,
                     ControlNames.EnvMapping,
-                    ControlNames.EnvMappingMaskScale,
+                    ControlNames.EnvMappingMaskScale),
+                new SectionDefinition("Glass", 2, true, true,
                     ControlNames.GlassEnabled,
                     ControlNames.GlassFresnelColor,
                     ControlNames.GlassBlurScaleBase,
@@ -473,6 +486,11 @@ namespace Material_Editor.Forms
             group.ContentLayout.Controls.Add(grid, 0, 0);
             sectionVisibilityMap[group] = definition.Controls;
             return group;
+        }
+
+        private static void RegisterDeferredControllerGroup(string controllerName, Func<bool> shouldBuildImmediately, Action buildControls, params string[] controlNames)
+        {
+            buildControls?.Invoke();
         }
 
         private CollapsibleGroupBox CreatePathsSection(string title, IReadOnlyList<string> controlNames, string fullWidthControlName)

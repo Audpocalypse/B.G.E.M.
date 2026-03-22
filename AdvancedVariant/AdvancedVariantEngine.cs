@@ -7,6 +7,9 @@ namespace Material_Editor.AdvancedVariant
 {
     internal static class AdvancedVariantEngine
     {
+        internal const int MaxLayerCountValue = 999;
+        internal const int MaxResolvedContextCount = 10000;
+
         public static IReadOnlyList<AdvancedVariantValidationIssue> Validate(AdvancedVariantOptions options)
         {
             var issues = new List<AdvancedVariantValidationIssue>();
@@ -24,6 +27,7 @@ namespace Material_Editor.AdvancedVariant
                 issues.Add(new AdvancedVariantValidationIssue("Advanced variant generation supports up to 4 layers."));
 
             var seenLayerNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            long resolvedContextCount = 1;
             for (int i = 0; i < layers.Count; i++)
             {
                 var layer = layers[i];
@@ -43,12 +47,27 @@ namespace Material_Editor.AdvancedVariant
                     continue;
                 }
 
+                if (layer.Indices.Count > MaxLayerCountValue)
+                {
+                    issues.Add(new AdvancedVariantValidationIssue(
+                        $"Layer '{layerName}' defines {layer.Indices.Count:N0} values. Advanced layers are limited to {MaxLayerCountValue:N0} values each."));
+                }
+
                 var seenIndices = new HashSet<int>();
                 foreach (int index in layer.Indices)
                 {
                     if (!seenIndices.Add(index))
                         issues.Add(new AdvancedVariantValidationIssue($"Layer '{layerName}' contains duplicate index value {index}."));
                 }
+
+                if (resolvedContextCount <= MaxResolvedContextCount)
+                    resolvedContextCount *= layer.Indices.Count;
+            }
+
+            if (resolvedContextCount > MaxResolvedContextCount)
+            {
+                issues.Add(new AdvancedVariantValidationIssue(
+                    $"Current layer counts would resolve to {resolvedContextCount:N0} advanced contexts. Advanced mode is limited to {MaxResolvedContextCount:N0} contexts to protect preview and generation performance."));
             }
 
             var rules = options.Rules ?? Array.Empty<AdvancedVariantRule>();
@@ -72,9 +91,10 @@ namespace Material_Editor.AdvancedVariant
             var resolved = new List<AdvancedVariantResolvedContext>();
             var layers = options.Layers;
             var activeIndices = new int[layers.Count];
+            int[] layerPadWidths = BuildLayerPadWidths(layers);
             int ordinal = 0;
 
-            ExpandLayer(options, layers, 0, activeIndices, resolved, ref ordinal);
+            ExpandLayer(options, layers, layerPadWidths, 0, activeIndices, resolved, ref ordinal);
             return resolved;
         }
 
@@ -86,6 +106,7 @@ namespace Material_Editor.AdvancedVariant
         private static void ExpandLayer(
             AdvancedVariantOptions options,
             IReadOnlyList<AdvancedVariantLayerDefinition> layers,
+            IReadOnlyList<int> layerPadWidths,
             int depth,
             int[] activeIndices,
             List<AdvancedVariantResolvedContext> resolved,
@@ -100,8 +121,9 @@ namespace Material_Editor.AdvancedVariant
                 resolved.Add(new AdvancedVariantResolvedContext(
                     ordinal++,
                     layerIndices,
-                    BuildCombinedIndex(layerIndices, padded: false),
-                    BuildCombinedIndex(layerIndices, padded: true),
+                    layerPadWidths,
+                    BuildCombinedIndex(layerIndices, null, padded: false),
+                    BuildCombinedIndex(layerIndices, layerPadWidths, padded: true),
                     indexToken,
                     indexTokenFallback,
                     layerTokens,
@@ -113,7 +135,7 @@ namespace Material_Editor.AdvancedVariant
             foreach (int index in layers[depth].Indices)
             {
                 activeIndices[depth] = index;
-                ExpandLayer(options, layers, depth + 1, activeIndices, resolved, ref ordinal);
+                ExpandLayer(options, layers, layerPadWidths, depth + 1, activeIndices, resolved, ref ordinal);
             }
         }
 
@@ -133,7 +155,7 @@ namespace Material_Editor.AdvancedVariant
             }
 
             fallbackUsed = true;
-            return BuildCombinedIndex(layerIndices, padded: false);
+            return BuildCombinedIndex(layerIndices, null, padded: false);
         }
 
         private static string[] ResolveLayerTokens(AdvancedVariantOptions options, IReadOnlyList<int> layerIndices, out bool[] fallbackUsed)
@@ -256,11 +278,29 @@ namespace Material_Editor.AdvancedVariant
             };
         }
 
-        private static string BuildCombinedIndex(IReadOnlyList<int> layerIndices, bool padded)
+        private static int[] BuildLayerPadWidths(IReadOnlyList<AdvancedVariantLayerDefinition> layers)
         {
-            return string.Concat(layerIndices.Select(index => padded
-                ? index.ToString("00", CultureInfo.InvariantCulture)
-                : index.ToString(CultureInfo.InvariantCulture)));
+            return (layers ?? Array.Empty<AdvancedVariantLayerDefinition>())
+                .Select(layer =>
+                {
+                    int maxIndex = (layer?.Indices ?? Array.Empty<int>()).DefaultIfEmpty(0).Max();
+                    return Math.Max(1, maxIndex.ToString(CultureInfo.InvariantCulture).Length);
+                })
+                .ToArray();
+        }
+
+        private static string BuildCombinedIndex(IReadOnlyList<int> layerIndices, IReadOnlyList<int> layerPadWidths, bool padded)
+        {
+            return string.Concat(layerIndices.Select((index, layerIndex) =>
+            {
+                if (!padded)
+                    return index.ToString(CultureInfo.InvariantCulture);
+
+                int padWidth = layerPadWidths != null && layerPadWidths.Count > layerIndex
+                    ? Math.Max(1, layerPadWidths[layerIndex])
+                    : 1;
+                return index.ToString(new string('0', padWidth), CultureInfo.InvariantCulture);
+            }));
         }
 
         private static void ValidateRuleLayer(

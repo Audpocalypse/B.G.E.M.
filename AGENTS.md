@@ -1,36 +1,30 @@
 # Agent Instructions
 
-## Repository overview
+This repository contains **B.G.E.M.**, a WinForms desktop application for viewing and editing Bethesda material files (`BGSM`, `BGEM`). It also includes bulk overwrite and variation-generation workflows, shared material serialization code, and a lightweight executable test harness.
 
-This repository contains **B.G.E.M.**, a WinForms desktop application for viewing and editing Bethesda material files:
+## High-Value Repo Guidance
 
-- `BGSM`
-- `BGEM`
+- Reuse existing WinForms patterns already present in the app.
+- Keep business logic and other reusable logic out of dialogs when possible.
+- Prefer extending an existing helper, service, or model before creating a parallel one.
+- Prefer the smallest valid change over introducing new abstractions.
+- Keep UI additions practical and consistent with the current app.
+- Use ASCII unless a file already requires otherwise.
+- Avoid destructive git operations unless explicitly requested.
 
-The app is primarily a GUI editor, but it also includes bulk workflows such as:
-
-- overwriting selected fields across many files
-- generating material variations from a template
-
-The solution also contains a small shared library for material serialization and a lightweight local test harness.
-
-## Solution layout
+## Solution Map
 
 - `Forms/`
   - main application window and menu-driven workflows
   - `Forms/Main.cs` is the central app entry point for most user actions
 - `Dialogs/`
-  - supporting dialogs such as field selection, target selection, output summaries, and variation generation
+  - supporting dialogs for selection, generation, and summaries
 - `Controls/`
-  - custom WinForms controls used throughout the editor, especially for file/path fields and typed property editors
+  - custom WinForms controls used across the app
 - `Services/`
-  - shared backend workflow logic such as:
-    - `FieldOverwriteTool`
-    - `MaterialVariationGenerator`
-    - `MaterialVariationTokenExpander`
-    - `MaterialFileCloner`
+  - shared backend workflow logic such as `FieldOverwriteTool` and `MaterialVariationGenerator`
 - `AdvancedVariant/`
-  - shared advanced-variant expansion, rule resolution, and related models
+  - shared Advanced Variant models, rule resolution, and expansion logic
 - `Theming/`
   - dialog and control theme helpers
 - `MaterialLib/`
@@ -38,22 +32,11 @@ The solution also contains a small shared library for material serialization and
 - `MaterialEditor.Tests/`
   - lightweight executable test harness for app-level behavior
 
-## Important application workflows
+## Workflow Entry Points
 
-### Main editor workflow
+Start by locating the real entry points in `Forms/Main.cs`.
 
-The core editor UI is driven from `Forms/Main.cs`.
-
-Important responsibilities there include:
-
-- loading and saving BGSM/BGEM files
-- building the main property UI
-- wiring file/path controls to material fields
-- launching bulk tools and summaries
-
-### Bulk overwrite workflow
-
-Current bulk overwrite flow:
+### Bulk overwrite
 
 1. `Forms/Main.cs`
 2. `Dialogs/FieldSelectionDialog.cs`
@@ -61,105 +44,61 @@ Current bulk overwrite flow:
 4. `Services/FieldOverwriteTool.cs`
 5. `Dialogs/OverwriteSummaryDialog.cs`
 
-This path is the main existing bulk-edit style workflow.
-
-### Generate variations workflow
-
-Current variation generation flow:
+### Generate variations
 
 1. `Forms/Main.cs`
 2. `Dialogs/VariationGeneratorDialog.cs`
 3. `Services/MaterialVariationGenerator.cs`
 4. `Dialogs/OverwriteSummaryDialog.cs`
 
-This path now supports:
+Reuse existing preview, clone, backup, save, and summary logic before adding a new path.
 
-- legacy indexed generation
-- Advanced Variant rule-based generation
+## Advanced Variant
 
-## Current Advanced Variant state
+When changing or extending Advanced Variant behavior:
 
-Advanced Variant work is no longer backend-only. The repository now includes:
+- keep business logic in shared backend code, not in the dialog
+- preserve predictable wildcard/default matching from blank layer cells
+- preserve specificity-based override behavior
+- preserve row-order tie breaking when two rules are equally specific
+- treat `IndexNN` as derived output, not primary authored input
+- avoid duplicating logic between generate and future bulk-edit paths
+- prefer small concrete models and services over speculative abstractions
 
-- shared Advanced Variant backend models and resolution logic under `AdvancedVariant/`
-- token expansion support in `MaterialVariationTokenExpander`
-- integration into `MaterialVariationGenerator`
-- a first-pass UI inside `VariationGeneratorDialog`
-
-### Current Advanced Variant behavior
-
-The current Advanced Variant implementation supports:
+Current supported behavior:
 
 - up to 4 logical layers
 - wildcard/default rule matching via blank layer cells
-- specificity-based override behavior
+- specificity-based overrides
 - row-order tie breaking for equally specific rules
-- derived combined indices:
-  - `{index}`
-  - `{indexNN}`
-- layer-specific numeric index tokens:
-  - `{indexLayer1}` to `{indexLayer4}`
-  - `{indexNNLayer1}` to `{indexNNLayer4}`
-- a single authored naming token:
-  - `{indexTok}`
+- derived combined indices: `{index}`, `{indexNN}`
+- layer-specific numeric index tokens: `{indexLayer1}` to `{indexLayer4}`, `{indexNNLayer1}` to `{indexNNLayer4}`
+- a single authored naming token: `{indexTok}`
 
-`{indexTok}` is currently the only authored Advanced naming token in the rules UI.
-If a resolved combination has no explicit `indexTok`, it falls back to the raw combined numeric index.
+`{indexTok}` is currently the only authored Advanced Variant naming token in the rules UI. If a resolved combination has no explicit `indexTok`, it falls back to the raw combined numeric index.
 
-### Advanced Variant implementation guidance
+## Legacy Reference Material
 
-When extending Advanced Variant behavior:
+Archived legacy reference material exists under `reference/advanced-variant/`.
 
-- keep business logic in shared backend code, not in the dialog
-- prefer small concrete models and services over speculative abstractions
-- preserve predictable wildcard/default and specificity behavior
-- treat `IndexNN` as derived from resolved layer indices, not primary authored input
-- avoid duplicating logic between generate and future bulk-edit paths
+Do not use it as the default implementation guide. Consult it only for unresolved behavior that is not already represented in the current C# codebase.
 
-### Reference material
+If legacy reference material must be consulted:
 
-Reference material lives under:
+- use it as behavioral reference only
+- do not port Pascal directly
+- do not copy FO4Edit/xEdit/JvInterpreter architecture
+- do not import script-environment limitations unless they are still logically useful here
 
-- `reference/advanced-variant/FO4 Iterative Record Generators MS v200.pas`
-- `reference/advanced-variant/cobjrecipes.csv`
-- `reference/advanced-variant/README.md`
-
-Use these as **behavioral reference only**.
-
-Do not:
-
-- port Pascal directly
-- copy FO4Edit/xEdit/JvInterpreter architecture
-- import script-environment limitations unless still logically useful here
-
-Use the references mainly for:
-
-- layered expansion behavior
-- wildcard/default semantics
-- specificity and override ordering
-- inferred index formatting
-- naming/token concepts
-
-## Coding guidance for this repository
-
-- Reuse existing WinForms patterns already present in the app.
-- Keep reusable logic out of dialogs when possible.
-- Prefer extending existing shared helpers before creating parallel ones.
-- Use ASCII unless the file already requires otherwise.
-- Keep UI additions practical and consistent with the app instead of introducing speculative frameworks.
-- Avoid destructive git operations unless explicitly requested.
-
-### File/path behavior
+## File and Path Behavior
 
 This app stores material and texture paths as game-relative style paths when possible.
-
-Current expectations:
 
 - texture selections should prefer the path after `Textures\`
 - material selections should prefer the path after `Materials\`
 - if those roots are missing, warn but allow the user to proceed
 
-## Verification expectations
+## Verification
 
 For app-level changes, prefer verifying with:
 
@@ -167,9 +106,9 @@ For app-level changes, prefer verifying with:
 - `dotnet build "MaterialEditor.Tests\\MaterialEditor.Tests.csproj" --no-restore`
 - `dotnet "MaterialEditor.Tests\\bin\\Debug\\net8.0-windows10.0.22621.0\\MaterialEditor.Tests.dll"`
 
-In this environment, it is often helpful to set:
+Helpful environment settings in this repo:
 
-- `DOTNET_CLI_HOME` to the repo-local `.dotnet-home`
+- `DOTNET_CLI_HOME` set to the repo-local `.dotnet-home`
 - `DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1`
 
 Example:
@@ -180,25 +119,28 @@ $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE='1'
 dotnet build "Material Editor.csproj" -p:RestoreIgnoreFailedSources=true -p:NuGetAudit=false
 ```
 
-## When starting a substantial change
+Important:
+
+- run verification commands sequentially, not in parallel
+- parallel verification can hit the expected CS2012 file-lock on `obj\...\bgem.dll`
+- sequential verification is the correct validation approach for this repo
+
+## Approach for Substantial Changes
 
 Before making major changes, especially to bulk workflows:
 
 1. Identify the actual entry points in `Forms/Main.cs`.
 2. Identify existing dialogs and shared services that already cover part of the workflow.
-3. Look for reusable naming, preview, clone, backup, save, and summary logic first.
-4. If Advanced Variant behavior is involved, inspect only the relevant reference sections and translate behavior into idiomatic C#.
+3. Reuse existing naming, preview, clone, backup, save, and summary logic first.
+4. If Advanced Variant behavior is involved, prefer the current C# implementation first; consult legacy reference material only for unresolved behavior that is not already captured in the codebase.
 
-## Durable rule for future tasks
+## Keeping This File Useful
 
-This file should describe the **repository and its stable conventions**, not only the latest task.
+This file should describe the repository's stable conventions, not only the latest task.
 
 When updating `AGENTS.md` in the future:
 
 - keep repo-wide guidance intact
 - add or revise major current initiatives only as a section of the file
 - avoid turning the whole document into a single-task brief
-
-
-Important Note:
-verification commands in parallel, the test-project build hit the expected CS2012 file-lock on obj\...\bgem.dll. Sequential verification is clean and remains the right way to validate this repo.
+- prefer durable repo-specific constraints over broad repo narration

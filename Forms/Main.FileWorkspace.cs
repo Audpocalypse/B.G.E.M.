@@ -63,25 +63,32 @@ namespace Material_Editor.Forms
             layoutMaterial.Enabled = true;
             layoutEffect.Enabled = true;
 
-            SuspendAll();
+            RunWithSingleEditorLoadingOverlay("Building editor...", () =>
+            {
+                SuspendAll();
+                try
+                {
+                    CreateMaterialControls();
 
-            CreateMaterialControls();
+                    int selectedIndex;
+                    if (currentMaterial.Version > 2 && currentMaterial.Version <= 22)
+                        selectedIndex = (int)Game.FO76;
+                    else
+                        selectedIndex = (int)Game.FO4;
 
-            int selectedIndex;
-            if (currentMaterial.Version > 2 && currentMaterial.Version <= 22)
-                selectedIndex = (int)Game.FO76;
-            else
-                selectedIndex = (int)Game.FO4;
+                    if ((int)CurrentGame != selectedIndex)
+                        SetGameSelection((Game)selectedIndex);
+                    else
+                        FillVersionDropdown();
 
-            if ((int)CurrentGame != selectedIndex)
-                SetGameSelection((Game)selectedIndex);
-            else
-                FillVersionDropdown();
-
-            SetMaterialTypeSelection(MaterialType.Material);
-            workspaceMode = WorkspaceMode.Single;
-
-            ResumeAll();
+                    SetMaterialTypeSelection(MaterialType.Material);
+                    workspaceMode = WorkspaceMode.Single;
+                }
+                finally
+                {
+                    ResumeAll();
+                }
+            });
             UpdateWorkspaceCommandState();
             UpdateWindowTitle();
         }
@@ -255,6 +262,7 @@ namespace Material_Editor.Forms
 
         private void ClearSingleWorkspace()
         {
+            pendingSingleEditorAppearanceRebuildMaterial = null;
             currentMaterial = null;
             originalMaterial = null;
             workFilePath = string.Empty;
@@ -327,21 +335,29 @@ namespace Material_Editor.Forms
             workFilePath = fileName;
             workspaceMode = WorkspaceMode.Single;
 
-            SuspendAll();
-            CreateMaterialControls(material);
+            RunWithSingleEditorLoadingOverlay("Opening material...", () =>
+            {
+                SuspendAll();
+                try
+                {
+                    CreateMaterialControls(material);
 
-            if (currentMaterial.Version > 2 && currentMaterial.Version <= 22)
-                SetGameSelection(Game.FO76);
-            else
-                SetGameSelection(Game.FO4);
+                    if (currentMaterial.Version > 2 && currentMaterial.Version <= 22)
+                        SetGameSelection(Game.FO76);
+                    else
+                        SetGameSelection(Game.FO4);
 
-            SetMaterialTypeSelection(material is BGEM ? MaterialType.Effect : MaterialType.Material);
+                    SetMaterialTypeSelection(material is BGEM ? MaterialType.Effect : MaterialType.Material);
 
-            FillVersionDropdown();
-            UpdateTopLevelSectionVisibility();
-            generalPageSection?.SetCollapsed(true);
-            ResumeAll();
-
+                    FillVersionDropdown();
+                    UpdateTopLevelSectionVisibility();
+                    generalPageSection?.SetCollapsed(true);
+                }
+                finally
+                {
+                    ResumeAll();
+                }
+            });
             saveToolStripMenuItem.Enabled = true;
             saveAsToolStripMenuItem.Enabled = true;
             closeToolStripMenuItem.Enabled = true;

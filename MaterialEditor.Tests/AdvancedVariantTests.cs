@@ -12,7 +12,10 @@ namespace MaterialEditor.Tests
     {
         public static void RunAll()
         {
+            Validate_AllowsLayerCountsUpTo999();
+            Validate_RejectsExcessiveResolvedContextCounts();
             Resolve_ExpandsFourLayersInStableOrder();
+            Resolve_IndexNNPaddingMatchesConfiguredLayerWidth();
             Resolve_AppliesDefaultAndSpecificOverrides();
             Resolve_SingleLayerRulesPopulateLayerIndexTokens();
             Resolve_LaterRuleWinsWithinEqualSpecificity();
@@ -20,10 +23,46 @@ namespace MaterialEditor.Tests
             Resolve_ExactRuleCanDisableRow();
             PreviewFieldValue_ExpandsAdvancedTokens();
             Generate_AdvancedPathWritesResolvedFieldValues();
+            Generate_AdvancedPathExpandsSecondLayerFieldTokens();
+            Generate_AdvancedPathExpandsTokensAlreadyPresentInTemplateFields();
             Generate_AdvancedPathSkipsDisabledRows();
             Generate_AdvancedPathRejectsDuplicateOutputPaths();
             Generate_AdvancedPathRejectsInvalidGeneratedName();
             Generate_LegacyPathStillSupportsIndexPlaceholders();
+        }
+
+        private static void Validate_AllowsLayerCountsUpTo999()
+        {
+            var options = new AdvancedVariantOptions
+            {
+                Layers = new[]
+                {
+                    new AdvancedVariantLayerDefinition("Layer1", Enumerable.Range(1, 999).ToArray()),
+                }
+            };
+
+            var issues = AdvancedVariantEngine.Validate(options);
+
+            AssertEqual(0, issues.Count, nameof(Validate_AllowsLayerCountsUpTo999));
+        }
+
+        private static void Validate_RejectsExcessiveResolvedContextCounts()
+        {
+            var options = new AdvancedVariantOptions
+            {
+                Layers = new[]
+                {
+                    new AdvancedVariantLayerDefinition("Layer1", Enumerable.Range(1, 101).ToArray()),
+                    new AdvancedVariantLayerDefinition("Layer2", Enumerable.Range(1, 100).ToArray()),
+                }
+            };
+
+            var issues = AdvancedVariantEngine.Validate(options);
+
+            AssertTrue(
+                issues.Any(issue => issue.Message.Contains("limited to", StringComparison.OrdinalIgnoreCase)
+                    && issue.Message.Contains("advanced contexts", StringComparison.OrdinalIgnoreCase)),
+                nameof(Validate_RejectsExcessiveResolvedContextCounts));
         }
 
         private static void Resolve_ExpandsFourLayersInStableOrder()
@@ -43,7 +82,23 @@ namespace MaterialEditor.Tests
 
             AssertEqual(4, contexts.Count, nameof(Resolve_ExpandsFourLayersInStableOrder));
             AssertSequenceEqual(new[] { "1346", "1356", "2346", "2356" }, contexts.Select(context => context.Index).ToArray(), nameof(Resolve_ExpandsFourLayersInStableOrder));
-            AssertSequenceEqual(new[] { "01030406", "01030506", "02030406", "02030506" }, contexts.Select(context => context.IndexNN).ToArray(), nameof(Resolve_ExpandsFourLayersInStableOrder));
+            AssertSequenceEqual(new[] { "1346", "1356", "2346", "2356" }, contexts.Select(context => context.IndexNN).ToArray(), nameof(Resolve_ExpandsFourLayersInStableOrder));
+        }
+
+        private static void Resolve_IndexNNPaddingMatchesConfiguredLayerWidth()
+        {
+            var context = AdvancedVariantEngine.Resolve(new AdvancedVariantOptions
+            {
+                Layers = new[]
+                {
+                    new AdvancedVariantLayerDefinition("Layer1", Enumerable.Range(1, 12).ToArray()),
+                    new AdvancedVariantLayerDefinition("Layer2", Enumerable.Range(1, 123).ToArray()),
+                }
+            }).First();
+
+            AssertEqual("01001", context.IndexNN, nameof(Resolve_IndexNNPaddingMatchesConfiguredLayerWidth));
+            AssertEqual("01", context.Layer1IndexNNText, nameof(Resolve_IndexNNPaddingMatchesConfiguredLayerWidth));
+            AssertEqual("001", context.Layer2IndexNNText, nameof(Resolve_IndexNNPaddingMatchesConfiguredLayerWidth));
         }
 
         private static void Resolve_AppliesDefaultAndSpecificOverrides()
@@ -176,7 +231,7 @@ namespace MaterialEditor.Tests
 
             string value = MaterialVariationGenerator.PreviewFieldValue("name_{index}_{indexNN}_{indexTok}_{indexLayer1}_{indexNNLayer2}_{indexTokLayer1}_{indexTokLayer2}", context);
 
-            AssertEqual("name_112_0112_red_1_12_primary_red", value, nameof(PreviewFieldValue_ExpandsAdvancedTokens));
+            AssertEqual("name_112_112_red_1_12_primary_red", value, nameof(PreviewFieldValue_ExpandsAdvancedTokens));
         }
 
         private static void Generate_AdvancedPathWritesResolvedFieldValues()
@@ -217,11 +272,92 @@ namespace MaterialEditor.Tests
             AssertTrue(results.All(result => result.Status == FieldCopyStatus.Success), nameof(Generate_AdvancedPathWritesResolvedFieldValues));
             AssertEqual(2, results.Count, nameof(Generate_AdvancedPathWritesResolvedFieldValues));
 
-            string firstText = File.ReadAllText(Path.Combine(outputPath, "variant_01_base.bgsm"));
-            string secondText = File.ReadAllText(Path.Combine(outputPath, "variant_02_special.bgsm"));
+            string firstText = File.ReadAllText(Path.Combine(outputPath, "variant_1_base.bgsm"));
+            string secondText = File.ReadAllText(Path.Combine(outputPath, "variant_2_special.bgsm"));
 
             AssertContains(firstText, "textures\\\\variant_1_base.dds", nameof(Generate_AdvancedPathWritesResolvedFieldValues));
             AssertContains(secondText, "textures\\\\variant_2_special.dds", nameof(Generate_AdvancedPathWritesResolvedFieldValues));
+        }
+
+        private static void Generate_AdvancedPathExpandsSecondLayerFieldTokens()
+        {
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string outputPath = outputDirectory.Path;
+            var template = new BGSM
+            {
+                DiffuseTexture = "textures\\base_d.dds",
+                NormalTexture = "textures\\base_n.dds"
+            };
+
+            var diffuseDescriptor = GetDescriptor(ControlNames.Diffuse);
+            var normalDescriptor = GetDescriptor(ControlNames.Normal);
+            var options = new MaterialVariationOptions
+            {
+                OutputPattern = Path.Combine(outputPath, "variant_{indexNN}.bgsm"),
+                Fields = new[]
+                {
+                    new MaterialVariationFieldAssignment(diffuseDescriptor, "Clothes\\VaultSuit\\vaultsuitNumber{indexLayer2}_d.dds"),
+                    new MaterialVariationFieldAssignment(normalDescriptor, "Clothes\\VaultSuit\\vaultsuitNumber{indexLayer2}_n.dds")
+                },
+                AdvancedVariant = new AdvancedVariantOptions
+                {
+                    Layers = new[]
+                    {
+                        new AdvancedVariantLayerDefinition("Layer1", new[] { 1 }),
+                        new AdvancedVariantLayerDefinition("Layer2", new[] { 1, 2 }),
+                    }
+                }
+            };
+
+            var results = MaterialVariationGenerator.Generate(template, options, serializeAsJson: true);
+
+            AssertTrue(results.All(result => result.Status == FieldCopyStatus.Success), nameof(Generate_AdvancedPathExpandsSecondLayerFieldTokens));
+            AssertEqual(2, results.Count, nameof(Generate_AdvancedPathExpandsSecondLayerFieldTokens));
+
+            string firstText = File.ReadAllText(Path.Combine(outputPath, "variant_11.bgsm"));
+            string secondText = File.ReadAllText(Path.Combine(outputPath, "variant_12.bgsm"));
+
+            AssertContains(firstText, "vaultsuitNumber1_d.dds", nameof(Generate_AdvancedPathExpandsSecondLayerFieldTokens));
+            AssertContains(firstText, "vaultsuitNumber1_n.dds", nameof(Generate_AdvancedPathExpandsSecondLayerFieldTokens));
+            AssertContains(secondText, "vaultsuitNumber2_d.dds", nameof(Generate_AdvancedPathExpandsSecondLayerFieldTokens));
+            AssertContains(secondText, "vaultsuitNumber2_n.dds", nameof(Generate_AdvancedPathExpandsSecondLayerFieldTokens));
+        }
+
+        private static void Generate_AdvancedPathExpandsTokensAlreadyPresentInTemplateFields()
+        {
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string outputPath = outputDirectory.Path;
+            var template = new BGSM
+            {
+                DiffuseTexture = "Clothes\\VaultSuit\\vaultsuitNumber{indexLayer2}_d.dds",
+                NormalTexture = "Clothes\\VaultSuit\\vaultsuitNumber{indexLayer2}_n.dds"
+            };
+
+            var options = new MaterialVariationOptions
+            {
+                OutputPattern = Path.Combine(outputPath, "variant_{indexNN}.bgsm"),
+                AdvancedVariant = new AdvancedVariantOptions
+                {
+                    Layers = new[]
+                    {
+                        new AdvancedVariantLayerDefinition("Layer1", new[] { 1 }),
+                        new AdvancedVariantLayerDefinition("Layer2", new[] { 1, 2 }),
+                    }
+                }
+            };
+
+            var results = MaterialVariationGenerator.Generate(template, options, serializeAsJson: true);
+
+            AssertTrue(results.All(result => result.Status == FieldCopyStatus.Success), nameof(Generate_AdvancedPathExpandsTokensAlreadyPresentInTemplateFields));
+            AssertEqual(2, results.Count, nameof(Generate_AdvancedPathExpandsTokensAlreadyPresentInTemplateFields));
+
+            string firstText = File.ReadAllText(Path.Combine(outputPath, "variant_11.bgsm"));
+            string secondText = File.ReadAllText(Path.Combine(outputPath, "variant_12.bgsm"));
+
+            AssertContains(firstText, "vaultsuitNumber1_d.dds", nameof(Generate_AdvancedPathExpandsTokensAlreadyPresentInTemplateFields));
+            AssertContains(firstText, "vaultsuitNumber1_n.dds", nameof(Generate_AdvancedPathExpandsTokensAlreadyPresentInTemplateFields));
+            AssertContains(secondText, "vaultsuitNumber2_d.dds", nameof(Generate_AdvancedPathExpandsTokensAlreadyPresentInTemplateFields));
+            AssertContains(secondText, "vaultsuitNumber2_n.dds", nameof(Generate_AdvancedPathExpandsTokensAlreadyPresentInTemplateFields));
         }
 
         private static void Generate_AdvancedPathSkipsDisabledRows()
@@ -249,7 +385,7 @@ namespace MaterialEditor.Tests
 
             AssertEqual(2, results.Count, nameof(Generate_AdvancedPathSkipsDisabledRows));
             AssertTrue(results.All(result => result.Status == FieldCopyStatus.Success), nameof(Generate_AdvancedPathSkipsDisabledRows));
-            AssertSequenceEqual(new[] { "variant_01.bgsm", "variant_03.bgsm" }, files, nameof(Generate_AdvancedPathSkipsDisabledRows));
+            AssertSequenceEqual(new[] { "variant_1.bgsm", "variant_3.bgsm" }, files, nameof(Generate_AdvancedPathSkipsDisabledRows));
         }
 
         private static void Generate_AdvancedPathRejectsDuplicateOutputPaths()

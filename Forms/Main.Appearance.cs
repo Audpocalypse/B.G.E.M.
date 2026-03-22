@@ -5,6 +5,7 @@ using System.Configuration;
 using System.Drawing;
 using System.Globalization;
 using System.Windows.Forms;
+using MaterialLib;
 using Material_Editor.Controls;
 using Material_Editor.Dialogs;
 using Material_Editor.Models;
@@ -21,21 +22,39 @@ namespace Material_Editor.Forms
             if (dialog.ShowDialog(this) != DialogResult.OK)
                 return;
 
-            bool themeChanged = !string.Equals(config.ThemeId, dialog.SelectedThemeId, StringComparison.OrdinalIgnoreCase);
-            bool fontChanged = config.Font == null
-                || !string.Equals(config.Font.Name, dialog.SelectedFont.Name, StringComparison.OrdinalIgnoreCase)
-                || Math.Abs(config.Font.SizeInPoints - dialog.SelectedFont.SizeInPoints) > 0.01f;
+            ApplySettingsSelections(
+                dialog.SelectedThemeId,
+                dialog.SelectedFont,
+                dialog.SelectedShowSplashAnimation,
+                dialog.SelectedBulkDirtyRemoveBehavior);
+        }
 
-            config.ThemeId = dialog.SelectedThemeId;
-            config.Font = dialog.SelectedFont;
-            config.ShowSplashAnimation = dialog.SelectedShowSplashAnimation;
-            config.BulkDirtyRemoveBehavior = dialog.SelectedBulkDirtyRemoveBehavior;
+        private void ApplySettingsSelections(string selectedThemeId, Font selectedFont, bool selectedShowSplashAnimation, BulkDirtyRemoveBehavior selectedBulkDirtyRemoveBehavior)
+        {
+            string nextThemeId = string.IsNullOrWhiteSpace(selectedThemeId)
+                ? ThemeIds.Default
+                : ThemeService.NormalizeThemeId(selectedThemeId);
+            Font nextFont = selectedFont ?? new Font(DefaultAppFont, FontStyle.Regular);
+
+            bool themeChanged = !string.Equals(config.ThemeId, nextThemeId, StringComparison.OrdinalIgnoreCase);
+            bool fontChanged = config.Font == null
+                || !string.Equals(config.Font.Name, nextFont.Name, StringComparison.OrdinalIgnoreCase)
+                || Math.Abs(config.Font.SizeInPoints - nextFont.SizeInPoints) > 0.01f
+                || config.Font.Style != nextFont.Style;
+
+            config.ThemeId = nextThemeId;
+            config.Font = nextFont;
+            config.ShowSplashAnimation = selectedShowSplashAnimation;
+            config.BulkDirtyRemoveBehavior = selectedBulkDirtyRemoveBehavior;
+
+            if (fontChanged && IsSingleMode && currentMaterial != null)
+                pendingSingleEditorAppearanceRebuildMaterial = CaptureCurrentSingleEditorState();
 
             if (themeChanged)
-                AppearanceService.SetCurrentTheme(config.ThemeId);
+                AppearanceService.SetCurrentTheme(nextThemeId);
 
             if (fontChanged)
-                AppearanceService.SetFont(config.Font);
+                AppearanceService.SetFont(nextFont);
         }
 
         internal static Config LoadConfig()
@@ -172,6 +191,9 @@ namespace Material_Editor.Forms
 
         protected override void ApplyAppearance(AppearanceDefinition appearance)
         {
+            if (TryHandleSingleEditorAppearanceRebuild())
+                return;
+
             config.Font = appearance.Font;
             config.ThemeId = appearance.Theme.Id;
 
@@ -185,6 +207,7 @@ namespace Material_Editor.Forms
             AppearanceApplicator.ApplyToToolStrip(menuStrip, appearance);
             AppearanceApplicator.ApplyToComboBox(listVersion, appearance, appearance.Theme.Palette.ControlBackground);
             ControlFactory.ApplyAppearance(appearance);
+            ApplyAppearanceToSingleEditorLoadingOverlay();
             ApplyDropdownTheme(ControlNames.AlphaBlendMode, appearance);
             RelayoutSingleEditorForAppearance();
         }
@@ -194,6 +217,36 @@ namespace Material_Editor.Forms
             var combo = ControlFactory.Find(controlName)?.Control as ComboBox;
             if (combo != null)
                 AppearanceApplicator.ApplyToComboBox(combo, appearance, appearance.Theme.Palette.ControlBackground);
+        }
+
+        private bool TryHandleSingleEditorAppearanceRebuild()
+        {
+            if (!IsSingleMode || pendingSingleEditorAppearanceRebuildMaterial == null)
+                return false;
+
+            BaseMaterialFile snapshot = pendingSingleEditorAppearanceRebuildMaterial;
+            pendingSingleEditorAppearanceRebuildMaterial = null;
+
+            RunWithSingleEditorLoadingOverlay("Rebuilding editor...", () =>
+            {
+                SuspendAll();
+                try
+                {
+                    forceSingleEditorControlRebuild = true;
+                    CreateMaterialControls(snapshot);
+                    generalPageSection?.SetCollapsed(true);
+                    materialPageSection?.SetCollapsed(true);
+                    effectPageSection?.SetCollapsed(true);
+                    UpdateTopLevelSectionVisibility();
+                }
+                finally
+                {
+                    forceSingleEditorControlRebuild = false;
+                    ResumeAll();
+                }
+            });
+
+            return true;
         }
 
         private void Main_Closing(object sender, FormClosingEventArgs e)

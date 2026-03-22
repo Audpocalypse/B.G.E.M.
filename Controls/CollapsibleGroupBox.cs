@@ -1,6 +1,5 @@
 using System;
 using System.Drawing;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Material_Editor.Theming;
 
@@ -8,11 +7,12 @@ namespace Material_Editor.Controls
 {
     internal sealed class CollapsibleGroupBox : GroupBox
     {
-        private const int WM_SETREDRAW = 0x000B;
-        private readonly Button toggleButton;
+        private readonly ToggleButton toggleButton;
         private bool collapsed;
 
         public TableLayoutPanel ContentLayout { get; }
+        public bool IsCollapsed => collapsed;
+        public event EventHandler CollapsedStateChanged;
 
         public CollapsibleGroupBox(string title, bool collapsible = false, bool collapsedByDefault = false)
         {
@@ -39,14 +39,14 @@ namespace Material_Editor.Controls
 
             if (collapsible)
             {
-                toggleButton = new Button
+                toggleButton = new ToggleButton
                 {
                     AutoSize = true,
                     AutoSizeMode = AutoSizeMode.GrowAndShrink,
                     Anchor = AnchorStyles.Top | AnchorStyles.Right,
                     Margin = new Padding(0),
                     Padding = new Padding(3, 0, 3, 0),
-                    TabStop = false
+                    CausesValidation = false
                 };
                 toggleButton.Click += ToggleButton_Click;
                 Controls.Add(toggleButton);
@@ -69,12 +69,11 @@ namespace Material_Editor.Controls
         private void SetCollapsedState(bool value)
         {
             bool stateChanged = collapsed != value;
-            var redrawHost = FindRedrawHost();
 
-            var parent = Parent;
+            Control parent = null;
             if (stateChanged)
             {
-                SetRedraw(redrawHost, false);
+                parent = Parent;
                 parent?.SuspendLayout();
                 SuspendLayout();
                 ContentLayout.SuspendLayout();
@@ -95,26 +94,7 @@ namespace Material_Editor.Controls
             ContentLayout.ResumeLayout(true);
             ResumeLayout(true);
             parent?.ResumeLayout(true);
-            PerformLayout();
-            parent?.PerformLayout();
-            SetRedraw(redrawHost, true);
-            redrawHost?.Invalidate(true);
-            redrawHost?.Update();
-        }
-
-        private Control FindRedrawHost()
-        {
-            Control current = this;
-            Control redrawHost = this;
-
-            while (current?.Parent != null)
-            {
-                current = current.Parent;
-                if (current is ScrollableControl)
-                    redrawHost = current;
-            }
-
-            return redrawHost;
+            CollapsedStateChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void PositionToggleButton()
@@ -124,14 +104,6 @@ namespace Material_Editor.Controls
 
             int x = Math.Max(6, ClientSize.Width - toggleButton.Width - 6);
             toggleButton.Location = new Point(x, 0);
-        }
-
-        private static void SetRedraw(Control control, bool enable)
-        {
-            if (control == null || !control.IsHandleCreated)
-                return;
-
-            SendMessage(control.Handle, WM_SETREDRAW, enable ? new IntPtr(1) : IntPtr.Zero, IntPtr.Zero);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -145,7 +117,15 @@ namespace Material_Editor.Controls
             ThemeApplicator.DrawGroupBox(e.Graphics, this, ThemeService.CurrentTheme);
         }
 
-        [DllImport("user32.dll")]
-        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+        private sealed class ToggleButton : Button
+        {
+            public ToggleButton()
+            {
+                SetStyle(ControlStyles.Selectable, false);
+                TabStop = false;
+            }
+
+            protected override bool ShowFocusCues => false;
+        }
     }
 }

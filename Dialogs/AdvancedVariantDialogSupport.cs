@@ -61,7 +61,13 @@ namespace Material_Editor.Dialogs
                 countItemPanel.Controls.Add(DialogLayoutSupport.CreateInlineLabel($"Layer {index + 1} count:", labelMargin));
 
                 decimal defaultValue = defaultValueFactory?.Invoke(index) ?? 0m;
-                var layerCountControl = DialogLayoutSupport.CreateNumericInput(0, 99, defaultValue, numericWidth, numericMargin, textAlign: textAlign);
+                var layerCountControl = DialogLayoutSupport.CreateNumericInput(
+                    0,
+                    AdvancedVariantEngine.MaxLayerCountValue,
+                    defaultValue,
+                    numericWidth,
+                    numericMargin,
+                    textAlign: textAlign);
                 if (valueChangedHandler != null)
                     layerCountControl.ValueChanged += valueChangedHandler;
 

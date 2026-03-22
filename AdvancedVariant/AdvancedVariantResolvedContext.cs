@@ -11,6 +11,7 @@ namespace Material_Editor.AdvancedVariant
         internal AdvancedVariantResolvedContext(
             int ordinal,
             IReadOnlyList<int> layerIndices,
+            IReadOnlyList<int> layerIndexPadWidths,
             string index,
             string indexNN,
             string indexTok,
@@ -21,6 +22,7 @@ namespace Material_Editor.AdvancedVariant
         {
             Ordinal = ordinal;
             LayerIndices = layerIndices?.ToArray() ?? Array.Empty<int>();
+            LayerIndexPadWidths = layerIndexPadWidths?.ToArray() ?? Array.Empty<int>();
             Index = index ?? string.Empty;
             IndexNN = indexNN ?? string.Empty;
             IndexTok = indexTok ?? string.Empty;
@@ -32,6 +34,7 @@ namespace Material_Editor.AdvancedVariant
 
         public int Ordinal { get; }
         public IReadOnlyList<int> LayerIndices { get; }
+        public IReadOnlyList<int> LayerIndexPadWidths { get; }
         public string Index { get; }
         public string IndexNN { get; }
         public string IndexTok { get; }
@@ -82,7 +85,7 @@ namespace Material_Editor.AdvancedVariant
         {
             int? value = GetLayerIndexOrNull(zeroBasedLayerIndex);
             return value.HasValue
-                ? value.Value.ToString("00", CultureInfo.InvariantCulture)
+                ? value.Value.ToString(new string('0', GetLayerPadWidth(zeroBasedLayerIndex)), CultureInfo.InvariantCulture)
                 : string.Empty;
         }
 
@@ -97,6 +100,14 @@ namespace Material_Editor.AdvancedVariant
         {
             return LayerIndexTokenFallbacks.Count > zeroBasedLayerIndex
                 && LayerIndexTokenFallbacks[zeroBasedLayerIndex];
+        }
+
+        private int GetLayerPadWidth(int zeroBasedLayerIndex)
+        {
+            if (LayerIndexPadWidths.Count <= zeroBasedLayerIndex)
+                return 1;
+
+            return Math.Max(1, LayerIndexPadWidths[zeroBasedLayerIndex]);
         }
     }
 }

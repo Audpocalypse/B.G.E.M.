@@ -12,8 +12,9 @@ namespace Material_Editor.Forms
         {
             CustomControl control;
 
-            if (currentMaterial != null)
+            if (currentMaterial != null && file != null && file.GetType() == currentMaterial.GetType())
             {
+                CopyMaterialState(currentMaterial, file);
                 file.Version = currentMaterial.Version;
             }
             else

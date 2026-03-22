@@ -7,6 +7,7 @@ namespace Material_Editor.Controls
     {
         private Label lbLabel;
         private NumericUpDown num;
+        private bool suppressChanged;
 
         private NumberControl(string label, Func<CustomControl, bool> visibilityCallback, Action<CustomControl> changedCallback, decimal initialValue, int decimalPlaces, decimal increment, decimal minValue, decimal maxValue) : base(label)
         {
@@ -58,6 +59,9 @@ namespace Material_Editor.Controls
 
         private void Num_ValueChanged(object sender, EventArgs e)
         {
+            if (suppressChanged)
+                return;
+
             InvokeChangedCallback();
         }
 
@@ -74,6 +78,22 @@ namespace Material_Editor.Controls
         public override object GetProperty()
         {
             return num.Value;
+        }
+
+        public override void SetProperty(object value)
+        {
+            decimal nextValue = value == null ? 0m : Convert.ToDecimal(value);
+            nextValue = Math.Min(num.Maximum, Math.Max(num.Minimum, nextValue));
+
+            suppressChanged = true;
+            try
+            {
+                num.Value = nextValue;
+            }
+            finally
+            {
+                suppressChanged = false;
+            }
         }
     }
 }

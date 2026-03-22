@@ -7,6 +7,7 @@ namespace Material_Editor.Controls
     {
         private Label lbLabel;
         private ComboBox dropdown;
+        private bool suppressChanged;
 
         public DropdownControl(string label, Func<CustomControl, bool> visibilityCallback, Action<CustomControl> changedCallback, object[] entries, int selection) : base(label)
         {
@@ -44,6 +45,9 @@ namespace Material_Editor.Controls
 
         private void Dropdown_SelectedIndexChanged(object sender, EventArgs e)
         {
+            if (suppressChanged)
+                return;
+
             InvokeChangedCallback();
         }
 
@@ -60,6 +64,25 @@ namespace Material_Editor.Controls
         public override object GetProperty()
         {
             return dropdown.SelectedIndex;
+        }
+
+        public override void SetProperty(object value)
+        {
+            int selection = value == null ? -1 : Convert.ToInt32(value);
+            if (dropdown.Items.Count == 0)
+                selection = -1;
+            else
+                selection = Math.Max(0, Math.Min(dropdown.Items.Count - 1, selection));
+
+            suppressChanged = true;
+            try
+            {
+                dropdown.SelectedIndex = selection;
+            }
+            finally
+            {
+                suppressChanged = false;
+            }
         }
     }
 }

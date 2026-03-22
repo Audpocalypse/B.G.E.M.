@@ -7,6 +7,7 @@ namespace Material_Editor.Controls
     {
         private Label lbLabel;
         private CheckedListBox checkedList;
+        private bool suppressChanged;
 
         public FlagControl(string label, Func<CustomControl, bool> visibilityCallback, Action<CustomControl> changedCallback, object[] entries, int flagValue) : base(label)
         {
@@ -77,7 +78,26 @@ namespace Material_Editor.Controls
 
         private void CheckedList_SelectedIndexChanged(object sender, EventArgs e)
         {
+            if (suppressChanged)
+                return;
+
             InvokeChangedCallback();
+        }
+
+        public override void SetProperty(object value)
+        {
+            int flagValue = value == null ? 0 : Convert.ToInt32(value);
+
+            suppressChanged = true;
+            try
+            {
+                for (int i = 0; i < checkedList.Items.Count; i++)
+                    checkedList.SetItemChecked(i, (flagValue & (1 << i)) != 0);
+            }
+            finally
+            {
+                suppressChanged = false;
+            }
         }
     }
 }

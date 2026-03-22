@@ -212,9 +212,19 @@ namespace Material_Editor.Services
             if (options == null || options.Layers == null || options.Layers.Count == 0)
                 return Array.Empty<AdvancedVariantResolvedContext>();
 
-            return AdvancedVariantEngine.Resolve(options)
-                .Where(context => context.Enabled)
-                .ToArray();
+            if (AdvancedVariantEngine.Validate(options).Count > 0)
+                return Array.Empty<AdvancedVariantResolvedContext>();
+
+            try
+            {
+                return AdvancedVariantEngine.Resolve(options)
+                    .Where(context => context.Enabled)
+                    .ToArray();
+            }
+            catch
+            {
+                return Array.Empty<AdvancedVariantResolvedContext>();
+            }
         }
     }
 }

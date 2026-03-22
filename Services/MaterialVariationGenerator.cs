@@ -1,4 +1,5 @@
 using Material_Editor.AdvancedVariant;
+using Material_Editor.Models;
 using MaterialLib;
 using System;
 using System.Collections.Generic;
@@ -233,6 +234,7 @@ namespace Material_Editor.Services
         {
             var results = new List<FieldCopyResult>();
             var fields = options.Fields ?? Array.Empty<MaterialVariationFieldAssignment>();
+            var templateStringFields = CaptureTemplateStringFields(template);
 
             foreach (var workItem in workItems)
             {
@@ -248,6 +250,8 @@ namespace Material_Editor.Services
                     float grayscaledValue = options.GreyscaleToPaletteScaleStart + options.GreyscaleToPaletteScaleStep * workItem.SequenceIndex;
                     greyscaleClone.GrayscaleToPaletteScale = grayscaledValue;
                 }
+
+                ExpandTemplateStringFields(clone, templateStringFields, workItem.LegacyIndex, workItem.AdvancedContext);
 
                 foreach (var field in fields)
                 {
@@ -276,6 +280,33 @@ namespace Material_Editor.Services
             }
 
             return results;
+        }
+
+        private static IReadOnlyList<(MaterialFieldDescriptor Descriptor, string Value)> CaptureTemplateStringFields(BaseMaterialFile template)
+        {
+            if (template == null)
+                return Array.Empty<(MaterialFieldDescriptor Descriptor, string Value)>();
+
+            return MaterialFieldRegistry.GetDescriptors(template)
+                .Select(descriptor => (Descriptor: descriptor, Value: descriptor.GetValue(template) as string))
+                .Where(item => !string.IsNullOrEmpty(item.Value))
+                .ToArray();
+        }
+
+        private static void ExpandTemplateStringFields(
+            BaseMaterialFile material,
+            IReadOnlyList<(MaterialFieldDescriptor Descriptor, string Value)> templateStringFields,
+            int? legacyIndex,
+            AdvancedVariantResolvedContext advancedContext)
+        {
+            if (material == null)
+                return;
+
+            foreach (var item in templateStringFields ?? Array.Empty<(MaterialFieldDescriptor Descriptor, string Value)>())
+            {
+                string expandedValue = MaterialVariationTokenExpander.Expand(item.Value, legacyIndex, advancedContext);
+                item.Descriptor.SetValue(material, expandedValue);
+            }
         }
 
         private sealed class VariationWorkItem
