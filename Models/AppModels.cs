@@ -10,6 +10,10 @@ namespace Material_Editor.Models
         public string ThemeId;
         public bool ShowSplashAnimation = true;
         public BulkDirtyRemoveBehavior BulkDirtyRemoveBehavior;
+        public bool CreateBackupsByDefault = true;
+        public bool RetainOriginalBackup;
+        public int MaxBackupsPerFile;
+        public long MaxBackupFolderMegabytes;
         public List<BulkFieldPreset> BulkFieldPresets = new();
     }
 

@@ -26,10 +26,22 @@ namespace Material_Editor.Forms
                 dialog.SelectedThemeId,
                 dialog.SelectedFont,
                 dialog.SelectedShowSplashAnimation,
-                dialog.SelectedBulkDirtyRemoveBehavior);
+                dialog.SelectedBulkDirtyRemoveBehavior,
+                dialog.SelectedCreateBackupsByDefault,
+                dialog.SelectedRetainOriginalBackup,
+                dialog.SelectedMaxBackupsPerFile,
+                dialog.SelectedMaxBackupFolderMegabytes);
         }
 
-        private void ApplySettingsSelections(string selectedThemeId, Font selectedFont, bool selectedShowSplashAnimation, BulkDirtyRemoveBehavior selectedBulkDirtyRemoveBehavior)
+        private void ApplySettingsSelections(
+            string selectedThemeId,
+            Font selectedFont,
+            bool selectedShowSplashAnimation,
+            BulkDirtyRemoveBehavior selectedBulkDirtyRemoveBehavior,
+            bool selectedCreateBackupsByDefault,
+            bool selectedRetainOriginalBackup,
+            int selectedMaxBackupsPerFile,
+            long selectedMaxBackupFolderMegabytes)
         {
             string nextThemeId = string.IsNullOrWhiteSpace(selectedThemeId)
                 ? ThemeIds.Default
@@ -46,6 +58,12 @@ namespace Material_Editor.Forms
             config.Font = nextFont;
             config.ShowSplashAnimation = selectedShowSplashAnimation;
             config.BulkDirtyRemoveBehavior = selectedBulkDirtyRemoveBehavior;
+            config.CreateBackupsByDefault = selectedCreateBackupsByDefault;
+            config.RetainOriginalBackup = selectedRetainOriginalBackup;
+            config.MaxBackupsPerFile = Math.Max(0, selectedMaxBackupsPerFile);
+            config.MaxBackupFolderMegabytes = Math.Max(0L, selectedMaxBackupFolderMegabytes);
+            if (!IsBulkMode)
+                bulkBackupBeforeWrite = config.CreateBackupsByDefault;
 
             if (fontChanged && IsSingleMode && currentMaterial != null)
                 pendingSingleEditorAppearanceRebuildMaterial = CaptureCurrentSingleEditorState();
@@ -71,6 +89,10 @@ namespace Material_Editor.Forms
                 ThemeId = ThemeIds.Default,
                 ShowSplashAnimation = true,
                 BulkDirtyRemoveBehavior = BulkDirtyRemoveBehavior.Ask,
+                CreateBackupsByDefault = true,
+                RetainOriginalBackup = false,
+                MaxBackupsPerFile = 0,
+                MaxBackupFolderMegabytes = 0,
                 BulkFieldPresets = new List<BulkFieldPreset>()
             };
 
@@ -88,6 +110,10 @@ namespace Material_Editor.Forms
                 var themeValue = appSettings["Theme"];
                 var showSplashAnimation = appSettings["ShowSplashAnimation"];
                 var bulkRemoveBehavior = appSettings["BulkDirtyRemoveBehavior"];
+                var createBackupsByDefault = appSettings["CreateBackupsByDefault"];
+                var retainOriginalBackup = appSettings["RetainOriginalBackup"];
+                var maxBackupsPerFile = appSettings["MaxBackupsPerFile"];
+                var maxBackupFolderMegabytes = appSettings["MaxBackupFolderMegabytes"];
                 var bulkFieldPresets = appSettings["BulkFieldPresets"];
                 if (!string.IsNullOrEmpty(fontName) && !string.IsNullOrEmpty(fontSizeStr))
                 {
@@ -116,6 +142,18 @@ namespace Material_Editor.Forms
                 {
                     loadedConfig.BulkDirtyRemoveBehavior = parsedBulkRemoveBehavior;
                 }
+
+                if (!string.IsNullOrEmpty(createBackupsByDefault) && bool.TryParse(createBackupsByDefault, out bool parsedCreateBackupsByDefault))
+                    loadedConfig.CreateBackupsByDefault = parsedCreateBackupsByDefault;
+
+                if (!string.IsNullOrEmpty(retainOriginalBackup) && bool.TryParse(retainOriginalBackup, out bool parsedRetainOriginalBackup))
+                    loadedConfig.RetainOriginalBackup = parsedRetainOriginalBackup;
+
+                if (!string.IsNullOrEmpty(maxBackupsPerFile) && int.TryParse(maxBackupsPerFile, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsedMaxBackupsPerFile))
+                    loadedConfig.MaxBackupsPerFile = Math.Max(0, parsedMaxBackupsPerFile);
+
+                if (!string.IsNullOrEmpty(maxBackupFolderMegabytes) && long.TryParse(maxBackupFolderMegabytes, NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsedMaxBackupFolderMegabytes))
+                    loadedConfig.MaxBackupFolderMegabytes = Math.Max(0L, parsedMaxBackupFolderMegabytes);
 
                 loadedConfig.BulkFieldPresets = BulkEditorPreferencesService.DeserializePresets(bulkFieldPresets);
             }
@@ -173,6 +211,32 @@ namespace Material_Editor.Forms
                     bulkRemoveBehavior.Value = config.BulkDirtyRemoveBehavior.ToString();
                 else
                     configFile.AppSettings.Settings.Add("BulkDirtyRemoveBehavior", config.BulkDirtyRemoveBehavior.ToString());
+
+                var createBackupsByDefault = configFile.AppSettings.Settings["CreateBackupsByDefault"];
+                if (createBackupsByDefault != null)
+                    createBackupsByDefault.Value = config.CreateBackupsByDefault.ToString();
+                else
+                    configFile.AppSettings.Settings.Add("CreateBackupsByDefault", config.CreateBackupsByDefault.ToString());
+
+                var retainOriginalBackup = configFile.AppSettings.Settings["RetainOriginalBackup"];
+                if (retainOriginalBackup != null)
+                    retainOriginalBackup.Value = config.RetainOriginalBackup.ToString();
+                else
+                    configFile.AppSettings.Settings.Add("RetainOriginalBackup", config.RetainOriginalBackup.ToString());
+
+                string maxBackupsPerFileValue = config.MaxBackupsPerFile.ToString(CultureInfo.InvariantCulture);
+                var maxBackupsPerFile = configFile.AppSettings.Settings["MaxBackupsPerFile"];
+                if (maxBackupsPerFile != null)
+                    maxBackupsPerFile.Value = maxBackupsPerFileValue;
+                else
+                    configFile.AppSettings.Settings.Add("MaxBackupsPerFile", maxBackupsPerFileValue);
+
+                string maxBackupFolderMegabytesValue = config.MaxBackupFolderMegabytes.ToString(CultureInfo.InvariantCulture);
+                var maxBackupFolderMegabytes = configFile.AppSettings.Settings["MaxBackupFolderMegabytes"];
+                if (maxBackupFolderMegabytes != null)
+                    maxBackupFolderMegabytes.Value = maxBackupFolderMegabytesValue;
+                else
+                    configFile.AppSettings.Settings.Add("MaxBackupFolderMegabytes", maxBackupFolderMegabytesValue);
 
                 string serializedPresets = BulkEditorPreferencesService.SerializePresets(config.BulkFieldPresets);
                 var bulkFieldPresets = configFile.AppSettings.Settings["BulkFieldPresets"];

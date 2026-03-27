@@ -26,6 +26,7 @@ namespace Material_Editor.Controls
 
             bool gridChangedSession = false;
             bool visibilityChanged = false;
+            var affectedRows = new HashSet<BulkMaterialEditRow>();
 
             foreach (((string filePath, string label) key, bool pendingValue) in pendingBooleanOverrides.ToArray())
             {
@@ -43,6 +44,7 @@ namespace Material_Editor.Controls
                         continue;
 
                     gridChangedSession = true;
+                    affectedRows.Add(row);
                     if (VisibilityDrivenFieldMap.ContainsKey(descriptor.Label))
                     {
                         row.RefreshDynamicState();
@@ -57,6 +59,8 @@ namespace Material_Editor.Controls
 
             if (!gridChangedSession)
                 return;
+
+            ClearStaleValidationErrors(affectedRows);
 
             if (visibilityChanged)
             {
@@ -75,9 +79,14 @@ namespace Material_Editor.Controls
             MaterialFieldDescriptor descriptor,
             DataGridViewCell gridCell,
             object inputValue,
-            string invalidText)
+            string invalidText,
+            Dictionary<(string FilePath, string Label), object> originalValues = null)
         {
-            if (!session.TrySetCellValue(row, descriptor, inputValue, out string errorMessage))
+            if (originalValues != null)
+                CaptureOriginalCellValue(originalValues, row, descriptor);
+
+            bool recordUndo = originalValues == null;
+            if (!session.TrySetCellValue(row, descriptor, inputValue, out string errorMessage, recordUndo))
             {
                 invalidCellTexts[(row.FilePath, descriptor.Label)] = invalidText;
                 gridCell.ErrorText = errorMessage ?? "Invalid value.";
@@ -99,6 +108,123 @@ namespace Material_Editor.Controls
             return true;
         }
 
+        private static void CaptureOriginalCellValue(
+            IDictionary<(string FilePath, string Label), object> originalValues,
+            BulkMaterialEditRow row,
+            MaterialFieldDescriptor descriptor)
+        {
+            if (originalValues == null || row == null || descriptor == null)
+                return;
+
+            (string FilePath, string Label) key = (row.FilePath, descriptor.Label);
+            if (!originalValues.ContainsKey(key))
+                originalValues[key] = row.GetCell(descriptor).CurrentValue;
+        }
+
+        private void RecordUndoBatch(Dictionary<(string FilePath, string Label), object> originalValues)
+        {
+            if (session == null || originalValues == null || originalValues.Count == 0)
+                return;
+
+            var changes = new List<BulkMaterialEditUndoChange>();
+            foreach (((string filePath, string label) key, object previousValue) in originalValues)
+            {
+                BulkMaterialEditRow row = session.Rows.FirstOrDefault(candidate => string.Equals(candidate.FilePath, key.filePath, StringComparison.OrdinalIgnoreCase));
+                MaterialFieldDescriptor descriptor = session.FindDescriptor(key.label);
+                if (row == null || descriptor == null)
+                    continue;
+
+                object currentValue = row.GetCell(descriptor).CurrentValue;
+                if (BulkMaterialEditValueComparer.ValuesEqual(previousValue, currentValue))
+                    continue;
+
+                changes.Add(new BulkMaterialEditUndoChange(row.FilePath, descriptor.Label, previousValue, currentValue));
+            }
+
+            session.RecordUndoEntry(changes);
+        }
+
+        private bool UndoLastChange()
+        {
+            return ApplyHistoryChange(() => session?.UndoLastChange() ?? Array.Empty<BulkMaterialEditUndoChange>());
+        }
+
+        private bool RedoLastChange()
+        {
+            return ApplyHistoryChange(() => session?.RedoLastChange() ?? Array.Empty<BulkMaterialEditUndoChange>());
+        }
+
+        private bool ApplyHistoryChange(Func<IReadOnlyList<BulkMaterialEditUndoChange>> changeAction)
+        {
+            if (session == null || changeAction == null)
+                return false;
+
+            CommitPendingEdits();
+
+            List<(string FilePath, string ColumnName)> selectedCells = grid.SelectedCells
+                .Cast<DataGridViewCell>()
+                .Select(cell => BuildCellReference(cell.RowIndex, cell.ColumnIndex))
+                .Where(reference => reference.HasValue)
+                .Select(reference => reference.Value)
+                .Distinct()
+                .ToList();
+            string[] selectedRows = SelectedRows
+                .Select(row => row.FilePath)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            (string FilePath, string ColumnName)? currentCellReference = grid.CurrentCell == null
+                ? null
+                : BuildCellReference(grid.CurrentCell.RowIndex, grid.CurrentCell.ColumnIndex);
+
+            IReadOnlyList<BulkMaterialEditUndoChange> appliedChanges = changeAction();
+            if (appliedChanges.Count == 0)
+            {
+                RefreshSummary();
+                return false;
+            }
+
+            bool visibilityChanged = false;
+            var affectedRows = new HashSet<BulkMaterialEditRow>();
+            foreach (BulkMaterialEditUndoChange change in appliedChanges)
+            {
+                invalidCellTexts.Remove((change.FilePath, change.DescriptorLabel));
+                pendingBooleanOverrides.Remove((change.FilePath, change.DescriptorLabel));
+                pendingDirtyRowPaths.Remove(change.FilePath);
+
+                BulkMaterialEditRow row = session.Rows.FirstOrDefault(candidate => string.Equals(candidate.FilePath, change.FilePath, StringComparison.OrdinalIgnoreCase));
+                MaterialFieldDescriptor descriptor = session.FindDescriptor(change.DescriptorLabel);
+                if (row == null || descriptor == null)
+                    continue;
+
+                affectedRows.Add(row);
+                visibilityChanged |= VisibilityDrivenFieldMap.ContainsKey(descriptor.Label);
+            }
+
+            foreach (BulkMaterialEditRow row in affectedRows)
+                row.RefreshDynamicState();
+
+            ClearStaleValidationErrors(affectedRows);
+
+            bool rebuilt = visibilityChanged && TryRefreshVisibilityDrivenColumns(
+                selectedRows,
+                currentCellReference?.FilePath ?? string.Empty,
+                currentCellReference?.ColumnName ?? string.Empty);
+
+            if (!rebuilt)
+                RefreshAllGridRows();
+
+            if (selectedCells.Count > 0)
+                ReselectCells(selectedCells);
+            else if (selectedRows.Length > 0)
+                ReselectRows(selectedRows);
+
+            if (currentCellReference.HasValue)
+                RestoreCurrentCell(currentCellReference.Value.FilePath, currentCellReference.Value.ColumnName);
+
+            RefreshSummary();
+            return true;
+        }
+
         private bool HandlePostEditRefresh(
             int rowIndex,
             BulkMaterialEditRow row,
@@ -107,6 +233,7 @@ namespace Material_Editor.Controls
             string focusFilePath,
             string focusColumnName)
         {
+            ClearStaleValidationErrors(new[] { row });
             RefreshGridRowState(grid.Rows[rowIndex], row);
             RefreshSummary();
 

@@ -17,10 +17,10 @@
     <Copyright>Copyright © 2015 - 2026</Copyright>
     <Company>Audpocalypse</Company>
     <Authors>Audpocalypse</Authors>
-    <Version>1.1.1</Version>
-    <AssemblyVersion>1.1.1</AssemblyVersion>
-    <FileVersion>1.1.1</FileVersion>
-    <InformationalVersion>1.1.1</InformationalVersion>
+    <Version>1.2.0</Version>
+    <AssemblyVersion>1.2.0</AssemblyVersion>
+    <FileVersion>1.2.0</FileVersion>
+    <InformationalVersion>1.2.0</InformationalVersion>
     <PackageProjectUrl>https://github.com/Audpocalypse/B.G.E.M.</PackageProjectUrl>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -29,12 +29,21 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove=".codex-*\**" />
+    <Compile Remove="artifacts\verify\**" />
+    <Compile Remove="obj\verify\**" />
     <Compile Remove="MaterialLib.Tests\**" />
     <Compile Remove="MaterialEditor.Tests\**" />
     <Compile Remove="MaterialLib\**" />
+    <EmbeddedResource Remove=".codex-*\**" />
+    <EmbeddedResource Remove="artifacts\verify\**" />
+    <EmbeddedResource Remove="obj\verify\**" />
     <EmbeddedResource Remove="MaterialLib.Tests\**" />
     <EmbeddedResource Remove="MaterialEditor.Tests\**" />
     <EmbeddedResource Remove="MaterialLib\**" />
+    <None Remove=".codex-*\**" />
+    <None Remove="artifacts\verify\**" />
+    <None Remove="obj\verify\**" />
     <None Remove="MaterialLib.Tests\**" />
     <None Remove="MaterialEditor.Tests\**" />
     <None Remove="MaterialLib\**" />

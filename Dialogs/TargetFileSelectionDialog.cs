@@ -15,23 +15,30 @@ namespace Material_Editor.Dialogs
         private readonly Button removeButton;
         private readonly Button okButton;
         private readonly ColorToggleCheckBox backupCheckBox;
+        private readonly ColorToggleCheckBox returnToBulkEditorCheckBox;
         private readonly ColorToggleCheckBox advancedModeCheckBox;
         private readonly HashSet<string> filePaths = new(StringComparer.OrdinalIgnoreCase);
         private readonly Label introLabel;
         private readonly Button cancelButton;
         private readonly bool allowAdvancedMode;
         private readonly bool allowMaterialTypeSelection;
+        private readonly bool allowReturnToBulkEditor;
         private readonly ComboBox materialTypeComboBox;
         private readonly Label materialTypeLabel;
         private MaterialType materialType;
 
         public TargetFileSelectionDialog(MaterialType materialType)
-            : this(materialType, allowMaterialTypeSelection: false, allowAdvancedMode: true)
+            : this(materialType, allowMaterialTypeSelection: false, allowAdvancedMode: true, allowReturnToBulkEditor: false)
         {
         }
 
         public TargetFileSelectionDialog()
-            : this(MaterialType.Material, allowMaterialTypeSelection: true, allowAdvancedMode: false)
+            : this(MaterialType.Material, allowMaterialTypeSelection: true, allowAdvancedMode: false, allowReturnToBulkEditor: false)
+        {
+        }
+
+        public TargetFileSelectionDialog(MaterialType materialType, bool allowReturnToBulkEditor)
+            : this(materialType, allowMaterialTypeSelection: false, allowAdvancedMode: true, allowReturnToBulkEditor: allowReturnToBulkEditor)
         {
         }
 
@@ -41,16 +48,23 @@ namespace Material_Editor.Dialogs
             .ToList();
 
         public bool BackupBeforeWrite => backupCheckBox.Checked;
+        public bool AddResultsToCurrentBulkEditor => returnToBulkEditorCheckBox.Checked;
         public bool UseAdvancedMode => allowAdvancedMode && advancedModeCheckBox.Checked;
         public MaterialType SelectedMaterialType => allowMaterialTypeSelection && materialTypeComboBox.SelectedItem is MaterialType selectedType
             ? selectedType
             : materialType;
 
-        private TargetFileSelectionDialog(MaterialType materialType, bool allowMaterialTypeSelection, bool allowAdvancedMode)
+        public void SetBackupDefault(bool enabled)
+        {
+            backupCheckBox.Checked = enabled;
+        }
+
+        private TargetFileSelectionDialog(MaterialType materialType, bool allowMaterialTypeSelection, bool allowAdvancedMode, bool allowReturnToBulkEditor)
         {
             this.materialType = materialType;
             this.allowMaterialTypeSelection = allowMaterialTypeSelection;
             this.allowAdvancedMode = allowAdvancedMode;
+            this.allowReturnToBulkEditor = allowReturnToBulkEditor;
 
             Text = "Select Target Files";
             AutoScaleMode = AutoScaleMode.Font;
@@ -182,12 +196,22 @@ namespace Material_Editor.Dialogs
 
             backupCheckBox = new ColorToggleCheckBox
             {
-                Text = "Create .bak backup for each overwritten file",
+                Text = "Create timestamped backups in the application's backup folder",
                 AutoSize = true,
                 Checked = true,
                 Margin = new Padding(0, 0, 0, 4)
             };
             optionsLayout.Controls.Add(backupCheckBox);
+
+            returnToBulkEditorCheckBox = new ColorToggleCheckBox
+            {
+                Text = "Add successful overwritten files to the current bulk editor",
+                AutoSize = true,
+                Checked = allowReturnToBulkEditor,
+                Visible = allowReturnToBulkEditor,
+                Margin = new Padding(0, 0, 0, 4)
+            };
+            optionsLayout.Controls.Add(returnToBulkEditorCheckBox);
 
             advancedModeCheckBox = new ColorToggleCheckBox
             {

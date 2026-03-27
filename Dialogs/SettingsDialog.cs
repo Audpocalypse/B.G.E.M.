@@ -14,6 +14,10 @@ namespace Material_Editor.Dialogs
         private readonly TextBox fontPreviewTextBox;
         private readonly ComboBox bulkRemoveBehaviorComboBox;
         private readonly CheckBox showSplashAnimationCheckBox;
+        private readonly CheckBox createBackupsByDefaultCheckBox;
+        private readonly CheckBox retainOriginalBackupCheckBox;
+        private readonly NumericUpDown maxBackupsPerFileNumericUpDown;
+        private readonly NumericUpDown maxBackupFolderMegabytesNumericUpDown;
         private readonly Panel contentPanel;
         private readonly TableLayoutPanel contentLayout;
         private readonly Button designThemeButton;
@@ -29,8 +33,8 @@ namespace Material_Editor.Dialogs
             AutoScaleMode = AutoScaleMode.Font;
             FormBorderStyle = FormBorderStyle.Sizable;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(700, 340);
-            MinimumSize = new Size(620, 320);
+            ClientSize = new Size(748, 484);
+            MinimumSize = new Size(680, 444);
             MaximizeBox = true;
             MinimizeBox = false;
             ShowInTaskbar = false;
@@ -41,6 +45,10 @@ namespace Material_Editor.Dialogs
                 : ThemeService.NormalizeThemeId(config.ThemeId);
             SelectedShowSplashAnimation = config.ShowSplashAnimation;
             SelectedBulkDirtyRemoveBehavior = config.BulkDirtyRemoveBehavior;
+            SelectedCreateBackupsByDefault = config.CreateBackupsByDefault;
+            SelectedRetainOriginalBackup = config.RetainOriginalBackup;
+            SelectedMaxBackupsPerFile = Math.Max(0, config.MaxBackupsPerFile);
+            SelectedMaxBackupFolderMegabytes = Math.Max(0L, config.MaxBackupFolderMegabytes);
 
             var mainLayout = new TableLayoutPanel
             {
@@ -161,13 +169,17 @@ namespace Material_Editor.Dialogs
             };
             contentLayout.Controls.Add(optionsGroup, 0, 1);
 
-            var optionsLayout = CreateInnerLayout();
-            optionsLayout.RowCount = 2;
+            var optionsLayout = CreateInnerLayout(new Padding(12, 10, 12, 17));
+            optionsLayout.RowCount = 6;
+            optionsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            optionsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            optionsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            optionsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             optionsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             optionsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             optionsGroup.Controls.Add(optionsLayout);
 
-            optionsLayout.Controls.Add(CreateLabel("Dirty bulk remove:"), 0, 0);
+            optionsLayout.Controls.Add(CreateLabel("Unsaved changes:"), 0, 0);
             bulkRemoveBehaviorComboBox = new ComboBox
             {
                 Dock = DockStyle.Fill,
@@ -188,6 +200,50 @@ namespace Material_Editor.Dialogs
             };
             optionsLayout.Controls.Add(showSplashAnimationCheckBox, 0, 1);
             optionsLayout.SetColumnSpan(showSplashAnimationCheckBox, 2);
+
+            createBackupsByDefaultCheckBox = new CheckBox
+            {
+                Text = "Create backups by default when overwriting or saving existing files",
+                AutoSize = true,
+                Checked = SelectedCreateBackupsByDefault,
+                Margin = new Padding(0, 8, 0, 0)
+            };
+            optionsLayout.Controls.Add(createBackupsByDefaultCheckBox, 0, 2);
+            optionsLayout.SetColumnSpan(createBackupsByDefaultCheckBox, 2);
+
+            retainOriginalBackupCheckBox = new CheckBox
+            {
+                Text = "Retain original backup on first save and protect it from cleanup",
+                AutoSize = true,
+                Checked = SelectedRetainOriginalBackup,
+                Margin = new Padding(0, 8, 0, 0)
+            };
+            optionsLayout.Controls.Add(retainOriginalBackupCheckBox, 0, 3);
+            optionsLayout.SetColumnSpan(retainOriginalBackupCheckBox, 2);
+
+            optionsLayout.Controls.Add(CreateLabel("Max backups per file:"), 0, 4);
+            maxBackupsPerFileNumericUpDown = new NumericUpDown
+            {
+                Dock = DockStyle.Left,
+                Minimum = 0,
+                Maximum = 10000,
+                Value = Math.Min(10000, SelectedMaxBackupsPerFile),
+                Width = 140
+            };
+            optionsLayout.Controls.Add(CreateNumericRow(maxBackupsPerFileNumericUpDown, "0 = unlimited"), 1, 4);
+
+            optionsLayout.Controls.Add(CreateLabel("Max backup folder size (MB):"), 0, 5);
+            maxBackupFolderMegabytesNumericUpDown = new NumericUpDown
+            {
+                Dock = DockStyle.Left,
+                Minimum = 0,
+                Maximum = decimal.MaxValue,
+                Value = SelectedMaxBackupFolderMegabytes > decimal.MaxValue
+                    ? decimal.MaxValue
+                    : SelectedMaxBackupFolderMegabytes,
+                Width = 140
+            };
+            optionsLayout.Controls.Add(CreateNumericRow(maxBackupFolderMegabytesNumericUpDown, "0 = unlimited"), 1, 5);
 
             var footerLayout = new FlowLayoutPanel
             {
@@ -217,11 +273,39 @@ namespace Material_Editor.Dialogs
         public Font SelectedFont => selectedFont;
         public bool SelectedShowSplashAnimation { get; private set; }
         public BulkDirtyRemoveBehavior SelectedBulkDirtyRemoveBehavior { get; private set; }
+        public bool SelectedCreateBackupsByDefault { get; private set; }
+        public bool SelectedRetainOriginalBackup { get; private set; }
+        public int SelectedMaxBackupsPerFile { get; private set; }
+        public long SelectedMaxBackupFolderMegabytes { get; private set; }
 
         internal bool SplashAnimationChecked
         {
             get => showSplashAnimationCheckBox.Checked;
             set => showSplashAnimationCheckBox.Checked = value;
+        }
+
+        internal bool CreateBackupsByDefaultChecked
+        {
+            get => createBackupsByDefaultCheckBox.Checked;
+            set => createBackupsByDefaultCheckBox.Checked = value;
+        }
+
+        internal bool RetainOriginalBackupChecked
+        {
+            get => retainOriginalBackupCheckBox.Checked;
+            set => retainOriginalBackupCheckBox.Checked = value;
+        }
+
+        internal decimal MaxBackupsPerFileValue
+        {
+            get => maxBackupsPerFileNumericUpDown.Value;
+            set => maxBackupsPerFileNumericUpDown.Value = ClampNumericValue(maxBackupsPerFileNumericUpDown, value);
+        }
+
+        internal decimal MaxBackupFolderMegabytesValue
+        {
+            get => maxBackupFolderMegabytesNumericUpDown.Value;
+            set => maxBackupFolderMegabytesNumericUpDown.Value = ClampNumericValue(maxBackupFolderMegabytesNumericUpDown, value);
         }
 
         internal void CommitSelections()
@@ -280,6 +364,32 @@ namespace Material_Editor.Dialogs
             };
         }
 
+        private static Control CreateNumericRow(Control input, string hint)
+        {
+            var layout = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                AutoSize = true,
+                WrapContents = false,
+                Margin = new Padding(0)
+            };
+            layout.Controls.Add(input);
+            layout.Controls.Add(new Label
+            {
+                Text = hint,
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(8, 6, 0, 0)
+            });
+            return layout;
+        }
+
+        private static decimal ClampNumericValue(NumericUpDown input, decimal value)
+        {
+            return Math.Max(input.Minimum, Math.Min(input.Maximum, value));
+        }
+
         private void ChooseFontButton_Click(object sender, EventArgs e)
         {
             using var fontDialog = new FontDialog
@@ -313,6 +423,10 @@ namespace Material_Editor.Dialogs
                 SelectedThemeId = choice.Theme.Id;
 
             SelectedShowSplashAnimation = showSplashAnimationCheckBox.Checked;
+            SelectedCreateBackupsByDefault = createBackupsByDefaultCheckBox.Checked;
+            SelectedRetainOriginalBackup = retainOriginalBackupCheckBox.Checked;
+            SelectedMaxBackupsPerFile = decimal.ToInt32(maxBackupsPerFileNumericUpDown.Value);
+            SelectedMaxBackupFolderMegabytes = decimal.ToInt64(maxBackupFolderMegabytesNumericUpDown.Value);
 
             if (bulkRemoveBehaviorComboBox.SelectedItem is BulkDirtyRemoveBehavior behavior)
                 SelectedBulkDirtyRemoveBehavior = behavior;

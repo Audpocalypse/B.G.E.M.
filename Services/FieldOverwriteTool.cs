@@ -1,4 +1,5 @@
 using MaterialLib;
+using Material_Editor.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,11 +11,17 @@ namespace Material_Editor.Services
     {
         public IReadOnlyList<FieldCopyResult> Run(BaseMaterialFile sourceState, IReadOnlyList<MaterialFieldDescriptor> descriptors, IReadOnlyList<string> targetFiles, bool backupBeforeWrite)
         {
+            return Run(sourceState, descriptors, targetFiles, backupBeforeWrite, config: null);
+        }
+
+        public IReadOnlyList<FieldCopyResult> Run(BaseMaterialFile sourceState, IReadOnlyList<MaterialFieldDescriptor> descriptors, IReadOnlyList<string> targetFiles, bool backupBeforeWrite, Config config)
+        {
             return Run(sourceState, new FieldOverwriteOptions
             {
                 Descriptors = descriptors ?? Array.Empty<MaterialFieldDescriptor>(),
                 TargetFiles = targetFiles ?? Array.Empty<string>(),
-                BackupBeforeWrite = backupBeforeWrite
+                BackupBeforeWrite = backupBeforeWrite,
+                Config = config
             });
         }
 
@@ -28,7 +35,7 @@ namespace Material_Editor.Services
             {
                 foreach (var target in options.TargetFiles ?? Array.Empty<string>())
                 {
-                    var result = ProcessTarget(sourceState, options.Descriptors, target, options.BackupBeforeWrite);
+                    var result = ProcessTarget(sourceState, options.Descriptors, target, options.BackupBeforeWrite, options.Config);
                     results.Add(result);
                 }
 
@@ -61,14 +68,14 @@ namespace Material_Editor.Services
                     continue;
                 }
 
-                var result = ProcessTargetIterative(sourceState, options.Descriptors, iterativeAssignments, fieldValueOverrides, context, options.BackupBeforeWrite);
+                var result = ProcessTargetIterative(sourceState, options.Descriptors, iterativeAssignments, fieldValueOverrides, context, options.BackupBeforeWrite, options.Config);
                 results.Add(result);
             }
 
             return results;
         }
 
-        private FieldCopyResult ProcessTarget(BaseMaterialFile sourceState, IReadOnlyList<MaterialFieldDescriptor> descriptors, string filePath, bool backupBeforeWrite)
+        private FieldCopyResult ProcessTarget(BaseMaterialFile sourceState, IReadOnlyList<MaterialFieldDescriptor> descriptors, string filePath, bool backupBeforeWrite, Config config)
         {
             if (!TryPrepareTargetMaterial(sourceState, descriptors, filePath, out BaseMaterialFile targetMaterial, out bool isJson, out IReadOnlyList<MaterialFieldDescriptor> supportedDescriptors, out FieldCopyResult failureResult))
                 return failureResult;
@@ -76,7 +83,7 @@ namespace Material_Editor.Services
             foreach (var descriptor in supportedDescriptors)
                 descriptor.SetValue(targetMaterial, descriptor.GetValue(sourceState));
 
-            return SaveTargetMaterial(filePath, targetMaterial, isJson, backupBeforeWrite);
+            return SaveTargetMaterial(filePath, targetMaterial, isJson, backupBeforeWrite, config);
         }
 
         private FieldCopyResult ProcessTargetIterative(
@@ -85,7 +92,8 @@ namespace Material_Editor.Services
             IReadOnlyDictionary<string, IterativeFieldAssignment> iterativeAssignments,
             IReadOnlyDictionary<(string TargetPath, string FieldLabel), string> fieldValueOverrides,
             IterativeTargetContext context,
-            bool backupBeforeWrite)
+            bool backupBeforeWrite,
+            Config config)
         {
             string filePath = context.TargetPath;
             if (!TryPrepareTargetMaterial(sourceState, descriptors, filePath, out BaseMaterialFile targetMaterial, out bool isJson, out IReadOnlyList<MaterialFieldDescriptor> supportedDescriptors, out FieldCopyResult failureResult))
@@ -123,7 +131,7 @@ namespace Material_Editor.Services
                 }
             }
 
-            return SaveTargetMaterial(filePath, targetMaterial, isJson, backupBeforeWrite);
+            return SaveTargetMaterial(filePath, targetMaterial, isJson, backupBeforeWrite, config);
         }
 
         private static object ConvertOverrideValue(MaterialFieldDescriptor descriptor, BaseMaterialFile targetMaterial, string overrideValue)
@@ -180,14 +188,15 @@ namespace Material_Editor.Services
             return true;
         }
 
-        private static FieldCopyResult SaveTargetMaterial(string filePath, BaseMaterialFile targetMaterial, bool isJson, bool backupBeforeWrite)
+        private static FieldCopyResult SaveTargetMaterial(string filePath, BaseMaterialFile targetMaterial, bool isJson, bool backupBeforeWrite, Config config)
         {
             return MaterialFilePersistence.SaveMaterialResult(
                 filePath,
                 targetMaterial,
                 isJson,
                 "Updated successfully.",
-                backupBeforeWrite);
+                backupBeforeWrite,
+                config);
         }
     }
 }

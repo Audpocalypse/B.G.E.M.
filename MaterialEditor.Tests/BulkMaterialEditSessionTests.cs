@@ -12,14 +12,20 @@ namespace MaterialEditor.Tests
         public static void RunAll()
         {
             Registry_TypeDescriptorsIncludeVersionSpecificFields();
-            Session_SortsDistinctRowsAndFlagsMixedTypes();
+            Session_PreservesInsertionOrderAndFlagsMixedTypes();
             Descriptor_ParsesAndFormatsSpecialTypes();
             Session_TracksUnsupportedVersionSpecificFields();
             Session_TracksDirtyStateForParentBooleanFields();
+            Session_RefreshDynamicStatePreservesDirtyBaseline();
+            Session_UndoRestoresRecordedCellValue();
             Session_ApplyWritesDirtyRowsAndCreatesBackups();
+            Session_ApplyCreatesMultipleTimestampedBackupsForSameFile();
             Session_ApplySelectedWritesOnlySelectedDirtyRows();
+            Session_ApplySelectedClearsUndoForSavedRows();
             Session_AddFilesKeepsDirtyStateAndDedupes();
             Session_ApplyFailureLeavesRowDirty();
+            Session_ApplyValidationFailureReportsFieldDetails();
+            Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata();
             SelectionService_SplitsMixedTypes();
             Preferences_SerializeAndResolvePresets();
             Export_UsesPatternTokensForCurrentRows();
@@ -35,7 +41,7 @@ namespace MaterialEditor.Tests
             AssertTrue(effectDescriptors.Any(descriptor => descriptor.Label == ControlNames.GlassBlurScaleFactor), nameof(Registry_TypeDescriptorsIncludeVersionSpecificFields));
         }
 
-        private static void Session_SortsDistinctRowsAndFlagsMixedTypes()
+        private static void Session_PreservesInsertionOrderAndFlagsMixedTypes()
         {
             using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
             string outputPath = outputDirectory.Path;
@@ -60,15 +66,18 @@ namespace MaterialEditor.Tests
             AssertSequenceEqual(
                 new[]
                 {
-                    MaterialFilePersistence.NormalizePath(bPath),
                     MaterialFilePersistence.NormalizePath(aPath),
-                    MaterialFilePersistence.NormalizePath(wrongPath)
+                    MaterialFilePersistence.NormalizePath(wrongPath),
+                    MaterialFilePersistence.NormalizePath(bPath)
                 },
                 session.Rows.Select(row => row.FilePath).ToArray(),
-                nameof(Session_SortsDistinctRowsAndFlagsMixedTypes));
+                nameof(Session_PreservesInsertionOrderAndFlagsMixedTypes));
 
-            AssertTrue(!session.Rows[0].HasLoadError, nameof(Session_SortsDistinctRowsAndFlagsMixedTypes));
-            AssertTrue(session.Rows[2].HasLoadError, nameof(Session_SortsDistinctRowsAndFlagsMixedTypes));
+            AssertEqual(0, session.Rows[0].InsertionIndex, nameof(Session_PreservesInsertionOrderAndFlagsMixedTypes));
+            AssertEqual(1, session.Rows[1].InsertionIndex, nameof(Session_PreservesInsertionOrderAndFlagsMixedTypes));
+            AssertEqual(2, session.Rows[2].InsertionIndex, nameof(Session_PreservesInsertionOrderAndFlagsMixedTypes));
+            AssertTrue(!session.Rows[0].HasLoadError, nameof(Session_PreservesInsertionOrderAndFlagsMixedTypes));
+            AssertTrue(session.Rows[1].HasLoadError, nameof(Session_PreservesInsertionOrderAndFlagsMixedTypes));
         }
 
         private static void Descriptor_ParsesAndFormatsSpecialTypes()
@@ -134,9 +143,67 @@ namespace MaterialEditor.Tests
             AssertTrue(row.IsDirty, nameof(Session_TracksDirtyStateForParentBooleanFields));
         }
 
+        private static void Session_RefreshDynamicStatePreservesDirtyBaseline()
+        {
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string path = TestFileSupport.CreateBgsm(outputDirectory.Path, "refresh.bgsm", material =>
+            {
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\original.dds";
+            });
+
+            var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { path });
+            var row = session.Rows.Single();
+            var diffuseDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.Diffuse);
+
+            AssertTrue(session.TrySetCellValue(row, diffuseDescriptor, "textures\\changed.dds", out string errorMessage), nameof(Session_RefreshDynamicStatePreservesDirtyBaseline));
+            AssertEqual(string.Empty, errorMessage ?? string.Empty, nameof(Session_RefreshDynamicStatePreservesDirtyBaseline));
+            AssertTrue(row.IsDirty, nameof(Session_RefreshDynamicStatePreservesDirtyBaseline));
+
+            row.RefreshDynamicState();
+
+            AssertEqual("textures\\original.dds", Convert.ToString(row.GetCell(diffuseDescriptor).OriginalValue), nameof(Session_RefreshDynamicStatePreservesDirtyBaseline));
+            AssertEqual("textures\\changed.dds", Convert.ToString(row.GetCell(diffuseDescriptor).CurrentValue), nameof(Session_RefreshDynamicStatePreservesDirtyBaseline));
+            AssertTrue(row.IsDirty, nameof(Session_RefreshDynamicStatePreservesDirtyBaseline));
+        }
+
+        private static void Session_UndoRestoresRecordedCellValue()
+        {
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string path = TestFileSupport.CreateBgsm(outputDirectory.Path, "undo.bgsm", material =>
+            {
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\original.dds";
+            });
+
+            var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { path });
+            var row = session.Rows.Single();
+            var diffuseDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.Diffuse);
+
+            AssertTrue(session.TrySetCellValue(row, diffuseDescriptor, "textures\\changed.dds", out string errorMessage, recordUndo: true), nameof(Session_UndoRestoresRecordedCellValue));
+            AssertEqual(string.Empty, errorMessage ?? string.Empty, nameof(Session_UndoRestoresRecordedCellValue));
+            AssertTrue(session.CanUndo, nameof(Session_UndoRestoresRecordedCellValue));
+            AssertTrue(!session.CanRedo, nameof(Session_UndoRestoresRecordedCellValue));
+
+            IReadOnlyList<BulkMaterialEditUndoChange> undone = session.UndoLastChange();
+
+            AssertEqual(1, undone.Count, nameof(Session_UndoRestoresRecordedCellValue));
+            AssertEqual("textures\\original.dds", Convert.ToString(row.GetCell(diffuseDescriptor).CurrentValue), nameof(Session_UndoRestoresRecordedCellValue));
+            AssertTrue(!session.CanUndo, nameof(Session_UndoRestoresRecordedCellValue));
+            AssertTrue(session.CanRedo, nameof(Session_UndoRestoresRecordedCellValue));
+
+            IReadOnlyList<BulkMaterialEditUndoChange> redone = session.RedoLastChange();
+
+            AssertEqual(1, redone.Count, nameof(Session_UndoRestoresRecordedCellValue));
+            AssertEqual("textures\\changed.dds", Convert.ToString(row.GetCell(diffuseDescriptor).CurrentValue), nameof(Session_UndoRestoresRecordedCellValue));
+            AssertTrue(session.CanUndo, nameof(Session_UndoRestoresRecordedCellValue));
+            AssertTrue(!session.CanRedo, nameof(Session_UndoRestoresRecordedCellValue));
+        }
+
         private static void Session_ApplyWritesDirtyRowsAndCreatesBackups()
         {
             using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            using var backupRoot = TestFileSupport.PushBackupRoot(outputDirectory.Path);
             string outputPath = outputDirectory.Path;
             string aPath = TestFileSupport.CreateBgsm(outputPath, "a.bgsm", material =>
             {
@@ -159,9 +226,43 @@ namespace MaterialEditor.Tests
 
             AssertEqual(FieldCopyStatus.Success, results.Single(result => result.TargetPath == MaterialFilePersistence.NormalizePath(aPath)).Status, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
             AssertEqual(FieldCopyStatus.Skipped, results.Single(result => result.TargetPath == MaterialFilePersistence.NormalizePath(bPath)).Status, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
-            AssertTrue(File.Exists($"{aPath}.bak"), nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
+            string[] backupFiles = GetOrderedBackupFiles(aPath);
+            AssertEqual(1, backupFiles.Length, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
+            AssertTrue(IsTimestampedBackupPath(backupFiles[0], aPath), nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
             AssertEqual("textures\\updated.dds", TestFileSupport.LoadBgsm(aPath).DiffuseTexture, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
             AssertTrue(!session.Rows[0].IsDirty, nameof(Session_ApplyWritesDirtyRowsAndCreatesBackups));
+        }
+
+        private static void Session_ApplyCreatesMultipleTimestampedBackupsForSameFile()
+        {
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            using var backupRoot = TestFileSupport.PushBackupRoot(outputDirectory.Path);
+            string path = TestFileSupport.CreateBgsm(outputDirectory.Path, "repeat.bgsm", material =>
+            {
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\original.dds";
+            });
+
+            var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { path });
+            var row = session.Rows.Single();
+            var diffuseDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.Diffuse);
+
+            AssertTrue(session.TrySetCellValue(row, diffuseDescriptor, "textures\\first.dds", out _), nameof(Session_ApplyCreatesMultipleTimestampedBackupsForSameFile));
+            IReadOnlyList<FieldCopyResult> firstResults = session.ApplyChanges(backupBeforeWrite: true);
+            AssertEqual(FieldCopyStatus.Success, firstResults.Single().Status, nameof(Session_ApplyCreatesMultipleTimestampedBackupsForSameFile));
+
+            AssertTrue(session.TrySetCellValue(row, diffuseDescriptor, "textures\\second.dds", out _), nameof(Session_ApplyCreatesMultipleTimestampedBackupsForSameFile));
+            IReadOnlyList<FieldCopyResult> secondResults = session.ApplyChanges(backupBeforeWrite: true);
+            AssertEqual(FieldCopyStatus.Success, secondResults.Single().Status, nameof(Session_ApplyCreatesMultipleTimestampedBackupsForSameFile));
+
+            string[] backupFiles = GetOrderedBackupFiles(path);
+            AssertEqual(2, backupFiles.Length, nameof(Session_ApplyCreatesMultipleTimestampedBackupsForSameFile));
+            AssertTrue(IsTimestampedBackupPath(backupFiles[0], path), nameof(Session_ApplyCreatesMultipleTimestampedBackupsForSameFile));
+            AssertTrue(IsTimestampedBackupPath(backupFiles[1], path), nameof(Session_ApplyCreatesMultipleTimestampedBackupsForSameFile));
+            AssertTrue(!string.Equals(Path.GetFileName(backupFiles[0]), Path.GetFileName(backupFiles[1]), StringComparison.OrdinalIgnoreCase), nameof(Session_ApplyCreatesMultipleTimestampedBackupsForSameFile));
+            AssertEqual("textures\\original.dds", TestFileSupport.LoadBgsm(backupFiles[0]).DiffuseTexture, nameof(Session_ApplyCreatesMultipleTimestampedBackupsForSameFile));
+            AssertEqual("textures\\first.dds", TestFileSupport.LoadBgsm(backupFiles[1]).DiffuseTexture, nameof(Session_ApplyCreatesMultipleTimestampedBackupsForSameFile));
+            AssertEqual("textures\\second.dds", TestFileSupport.LoadBgsm(path).DiffuseTexture, nameof(Session_ApplyCreatesMultipleTimestampedBackupsForSameFile));
         }
 
         private static void Session_ApplyFailureLeavesRowDirty()
@@ -181,6 +282,76 @@ namespace MaterialEditor.Tests
 
             AssertEqual(FieldCopyStatus.Failed, results.Single().Status, nameof(Session_ApplyFailureLeavesRowDirty));
             AssertTrue(session.Rows[0].IsDirty, nameof(Session_ApplyFailureLeavesRowDirty));
+        }
+
+        private static void Session_ApplyValidationFailureReportsFieldDetails()
+        {
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string path = TestFileSupport.CreateBgsm(outputDirectory.Path, "invalid-save.bgsm", material =>
+            {
+                material.Version = 2;
+                material.GrayscaleToPaletteScale = 1.0f;
+            });
+
+            var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { path });
+            var row = session.Rows.Single();
+            var scaleDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.GrayscaleToPaletteScale);
+
+            AssertEqual(false, session.TrySetCellValue(row, scaleDescriptor, string.Empty, out string errorMessage), nameof(Session_ApplyValidationFailureReportsFieldDetails));
+            AssertTrue(!string.IsNullOrWhiteSpace(errorMessage), nameof(Session_ApplyValidationFailureReportsFieldDetails));
+            AssertTrue(row.HasValidationErrors, nameof(Session_ApplyValidationFailureReportsFieldDetails));
+
+            IReadOnlyList<FieldCopyResult> results = session.ApplySelectedChanges(new[] { row }, backupBeforeWrite: false);
+
+            AssertEqual(1, results.Count, nameof(Session_ApplyValidationFailureReportsFieldDetails));
+            AssertEqual(FieldCopyStatus.Failed, results[0].Status, nameof(Session_ApplyValidationFailureReportsFieldDetails));
+            AssertTrue((results[0].Message ?? string.Empty).Contains(ControlNames.GrayscaleToPaletteScale, StringComparison.Ordinal), nameof(Session_ApplyValidationFailureReportsFieldDetails));
+        }
+
+        private static void Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata()
+        {
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string materialsDirectory = Path.Combine(outputDirectory.Path, "Materials", "Armor");
+            Directory.CreateDirectory(materialsDirectory);
+            string path = TestFileSupport.CreateBgsm(materialsDirectory, "reload.bgsm", material =>
+            {
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\original.dds";
+            });
+            DateTime initialCreationTime = new DateTime(2024, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+            DateTime initialLastWriteTime = new DateTime(2024, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+            File.SetCreationTimeUtc(path, initialCreationTime);
+            File.SetLastWriteTimeUtc(path, initialLastWriteTime);
+
+            var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { path });
+            var diffuseDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.Diffuse);
+            BulkMaterialEditRow originalRow = session.Rows[0];
+            AssertEqual("reload.bgsm", originalRow.FileName, nameof(Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata));
+            AssertEqual("Armor\\reload.bgsm", originalRow.DisplayPath, nameof(Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata));
+            AssertEqual("Armor", originalRow.DisplayFolder, nameof(Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata));
+            AssertEqual(initialCreationTime, originalRow.CreationTimeUtc, nameof(Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata));
+            AssertEqual(initialLastWriteTime, originalRow.LastWriteTimeUtc, nameof(Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata));
+            AssertTrue(session.TrySetCellValue(originalRow, diffuseDescriptor, "textures\\edited.dds", out _), nameof(Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata));
+            AssertTrue(originalRow.IsDirty, nameof(Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata));
+
+            DateTime updatedCreationTime = new DateTime(2024, 5, 6, 7, 8, 9, DateTimeKind.Utc);
+            DateTime updatedLastWriteTime = new DateTime(2024, 6, 7, 8, 9, 10, DateTimeKind.Utc);
+            TestFileSupport.SaveMaterial(path, new BGSM
+            {
+                Version = 2,
+                DiffuseTexture = "textures\\original.dds"
+            });
+            File.SetCreationTimeUtc(path, updatedCreationTime);
+            File.SetLastWriteTimeUtc(path, updatedLastWriteTime);
+
+            IReadOnlyList<BulkMaterialEditRow> reloaded = session.ReloadRows(new[] { session.Rows[0] });
+
+            AssertEqual(1, reloaded.Count, nameof(Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata));
+            AssertEqual(originalRow.InsertionIndex, reloaded[0].InsertionIndex, nameof(Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata));
+            AssertEqual("textures\\original.dds", Convert.ToString(reloaded[0].GetCell(diffuseDescriptor).CurrentValue), nameof(Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata));
+            AssertEqual(updatedCreationTime, reloaded[0].CreationTimeUtc, nameof(Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata));
+            AssertEqual(updatedLastWriteTime, reloaded[0].LastWriteTimeUtc, nameof(Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata));
+            AssertTrue(!reloaded[0].IsDirty, nameof(Session_ReloadRowsRestoresDiskStateAndRefreshesMetadata));
         }
 
         private static void Session_ApplySelectedWritesOnlySelectedDirtyRows()
@@ -211,6 +382,29 @@ namespace MaterialEditor.Tests
             AssertEqual("textures\\b_changed.dds", TestFileSupport.LoadBgsm(bPath).DiffuseTexture, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
             AssertTrue(session.Rows[0].IsDirty, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
             AssertTrue(!session.Rows[1].IsDirty, nameof(Session_ApplySelectedWritesOnlySelectedDirtyRows));
+        }
+
+        private static void Session_ApplySelectedClearsUndoForSavedRows()
+        {
+            using var outputDirectory = TestFileSupport.CreateTempDirectoryScope();
+            string path = TestFileSupport.CreateBgsm(outputDirectory.Path, "saved.bgsm", material =>
+            {
+                material.Version = 2;
+                material.DiffuseTexture = "textures\\saved.dds";
+            });
+
+            var session = BulkMaterialEditSession.Create(MaterialType.Material, new[] { path });
+            var row = session.Rows.Single();
+            var diffuseDescriptor = session.AllDescriptors.Single(descriptor => descriptor.Label == ControlNames.Diffuse);
+
+            AssertTrue(session.TrySetCellValue(row, diffuseDescriptor, "textures\\saved_changed.dds", out _, recordUndo: true), nameof(Session_ApplySelectedClearsUndoForSavedRows));
+            AssertTrue(session.CanUndo, nameof(Session_ApplySelectedClearsUndoForSavedRows));
+
+            IReadOnlyList<FieldCopyResult> results = session.ApplySelectedChanges(new[] { row }, backupBeforeWrite: false);
+
+            AssertEqual(FieldCopyStatus.Success, results.Single().Status, nameof(Session_ApplySelectedClearsUndoForSavedRows));
+            AssertTrue(!session.CanUndo, nameof(Session_ApplySelectedClearsUndoForSavedRows));
+            AssertTrue(!session.CanRedo, nameof(Session_ApplySelectedClearsUndoForSavedRows));
         }
 
         private static void Session_AddFilesKeepsDirtyStateAndDedupes()
@@ -322,6 +516,54 @@ namespace MaterialEditor.Tests
         {
             if (!expected.SequenceEqual(actual, StringComparer.Ordinal))
                 throw new InvalidOperationException($"{testName} failed: sequences did not match.");
+        }
+
+        private static string[] GetOrderedBackupFiles(string sourcePath)
+        {
+            return MaterialBackupService.GetAvailableBackups(sourcePath)
+                .Where(entry => !entry.IsLegacy && !entry.IsRetainedOriginal)
+                .OrderBy(entry => entry.DisplayLabel, StringComparer.OrdinalIgnoreCase)
+                .Select(entry => entry.BackupPath)
+                .ToArray();
+        }
+
+        private static bool IsTimestampedBackupPath(string backupPath, string sourcePath)
+        {
+            string expectedDirectory = MaterialBackupService.BackupDirectoryPathValue;
+            if (!string.Equals(Path.GetDirectoryName(backupPath), expectedDirectory, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            string fileName = Path.GetFileName(backupPath);
+            string expectedSuffix = $"_{Path.GetFileName(sourcePath)}.bak";
+            if (!fileName.EndsWith(expectedSuffix, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            int separatorIndex = fileName.IndexOf('_');
+            if (separatorIndex != 21)
+                return false;
+
+            string prefix = fileName[..separatorIndex];
+            return char.IsDigit(prefix[0])
+                && char.IsDigit(prefix[1])
+                && char.IsDigit(prefix[2])
+                && char.IsDigit(prefix[3])
+                && char.IsDigit(prefix[4])
+                && char.IsDigit(prefix[5])
+                && char.IsDigit(prefix[6])
+                && char.IsDigit(prefix[7])
+                && prefix[8] == '-'
+                && char.IsDigit(prefix[9])
+                && char.IsDigit(prefix[10])
+                && char.IsDigit(prefix[11])
+                && char.IsDigit(prefix[12])
+                && char.IsDigit(prefix[13])
+                && char.IsDigit(prefix[14])
+                && char.IsDigit(prefix[15])
+                && char.IsDigit(prefix[16])
+                && char.IsDigit(prefix[17])
+                && prefix[18] == '-'
+                && char.IsDigit(prefix[19])
+                && char.IsDigit(prefix[20]);
         }
     }
 }

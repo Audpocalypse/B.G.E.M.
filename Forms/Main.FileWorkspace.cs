@@ -13,6 +13,12 @@ namespace Material_Editor.Forms
 {
     internal partial class Main
     {
+        private sealed class WorkflowExecutionResult
+        {
+            public IReadOnlyList<FieldCopyResult> Results { get; init; }
+            public bool AddResultsToCurrentBulkEditor { get; init; }
+        }
+
         private string ChangeFileExtension(string filePath)
         {
             if (filePath == null)
@@ -23,7 +29,11 @@ namespace Material_Editor.Forms
 
         private string BuildSuggestedVariationOutputPattern()
         {
-            string sourcePath = workFilePath;
+            return BuildSuggestedVariationOutputPattern(workFilePath);
+        }
+
+        private string BuildSuggestedVariationOutputPattern(string sourcePath)
+        {
             if (!string.IsNullOrWhiteSpace(sourcePath))
             {
                 try
@@ -45,6 +55,84 @@ namespace Material_Editor.Forms
             }
 
             return "variation_{index}.bgsm";
+        }
+
+        private WorkflowExecutionResult RunOverwriteFilesByFieldWorkflow(BaseMaterialFile currentState, BaseMaterialFile baselineOverride = null, bool allowReturnToBulkEditor = false)
+        {
+            if (currentState == null)
+                return null;
+
+            var descriptors = MaterialFieldRegistry.GetDescriptors(currentState);
+            if (descriptors.Count == 0)
+            {
+                MessageBox.Show("No writable fields are available for the current material.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return null;
+            }
+
+            BaseMaterialFile baseline = baselineOverride ?? originalMaterial ?? CloneMaterial(currentState) ?? currentState;
+
+            using var fieldSelection = new FieldSelectionDialog(descriptors, baseline, currentState);
+            if (fieldSelection.ShowDialog(this) != DialogResult.OK || fieldSelection.SelectedFields == null || fieldSelection.SelectedFields.Count == 0)
+                return null;
+
+            using var targetDialog = new TargetFileSelectionDialog(MaterialFileTypeHelper.GetMaterialType(currentState), allowReturnToBulkEditor);
+            targetDialog.SetBackupDefault(config.CreateBackupsByDefault);
+            if (targetDialog.ShowDialog(this) != DialogResult.OK)
+                return null;
+
+            var tool = new FieldOverwriteTool();
+            if (targetDialog.UseAdvancedMode)
+            {
+                using var advancedDialog = new AdvancedFieldOverwriteDialog(currentState, fieldSelection.SelectedFields, targetDialog.TargetFiles);
+                if (advancedDialog.ShowDialog(this) != DialogResult.OK || advancedDialog.Options == null)
+                    return null;
+
+                return new WorkflowExecutionResult
+                {
+                    Results = tool.Run(currentState, new FieldOverwriteOptions
+                    {
+                        Descriptors = fieldSelection.SelectedFields,
+                        TargetFiles = targetDialog.TargetFiles,
+                        BackupBeforeWrite = targetDialog.BackupBeforeWrite,
+                        Config = config,
+                        IterativeOptions = advancedDialog.Options
+                    }),
+                    AddResultsToCurrentBulkEditor = targetDialog.AddResultsToCurrentBulkEditor
+                };
+            }
+
+            return new WorkflowExecutionResult
+            {
+                Results = tool.Run(currentState, fieldSelection.SelectedFields, targetDialog.TargetFiles, targetDialog.BackupBeforeWrite, config),
+                AddResultsToCurrentBulkEditor = targetDialog.AddResultsToCurrentBulkEditor
+            };
+        }
+
+        private WorkflowExecutionResult RunGenerateVariationsWorkflow(BaseMaterialFile template, string suggestedOutputPattern, bool allowReturnToBulkEditor = false)
+        {
+            if (template == null)
+                return null;
+
+            var descriptors = MaterialFieldRegistry.GetDescriptors(template)
+                .Where(descriptor => descriptor.GetValue(template) is string)
+                .ToList();
+
+            if (descriptors.Count == 0)
+            {
+                MessageBox.Show("No string or path fields are available for variation.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return null;
+            }
+
+            var currentValues = descriptors.Select(descriptor => descriptor.GetValue(template) as string ?? string.Empty).ToList();
+            using var dialog = new VariationGeneratorDialog(descriptors, currentValues, suggestedOutputPattern, allowReturnToBulkEditor);
+            if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Options == null)
+                return null;
+
+            return new WorkflowExecutionResult
+            {
+                Results = MaterialVariationGenerator.Generate(template, dialog.Options, serializeToJSONToolStripMenuItem.Checked),
+                AddResultsToCurrentBulkEditor = dialog.AddResultsToCurrentBulkEditor
+            };
         }
 
         private void NewToolStripMenuItem_Click(object sender, EventArgs e)
@@ -89,6 +177,7 @@ namespace Material_Editor.Forms
                     ResumeAll();
                 }
             });
+            ResetSingleEditorUndoState(currentMaterial);
             UpdateWorkspaceCommandState();
             UpdateWindowTitle();
         }
@@ -156,45 +245,11 @@ namespace Material_Editor.Forms
             if (currentState == null)
                 return;
 
-            var descriptors = MaterialFieldRegistry.GetDescriptors(currentState);
-            if (descriptors.Count == 0)
-            {
-                MessageBox.Show("No writable fields are available for the current material.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            var baseline = originalMaterial ?? CloneMaterial(currentState) ?? currentState;
-
-            using var fieldSelection = new FieldSelectionDialog(descriptors, baseline, currentState);
-            if (fieldSelection.ShowDialog(this) != DialogResult.OK || fieldSelection.SelectedFields == null || fieldSelection.SelectedFields.Count == 0)
+            WorkflowExecutionResult execution = RunOverwriteFilesByFieldWorkflow(currentState);
+            if (execution?.Results == null)
                 return;
 
-            using var targetDialog = new TargetFileSelectionDialog(CurrentMaterialType);
-            if (targetDialog.ShowDialog(this) != DialogResult.OK)
-                return;
-
-            var tool = new FieldOverwriteTool();
-            IReadOnlyList<FieldCopyResult> results;
-            if (targetDialog.UseAdvancedMode)
-            {
-                using var advancedDialog = new AdvancedFieldOverwriteDialog(currentState, fieldSelection.SelectedFields, targetDialog.TargetFiles);
-                if (advancedDialog.ShowDialog(this) != DialogResult.OK || advancedDialog.Options == null)
-                    return;
-
-                results = tool.Run(currentState, new FieldOverwriteOptions
-                {
-                    Descriptors = fieldSelection.SelectedFields,
-                    TargetFiles = targetDialog.TargetFiles,
-                    BackupBeforeWrite = targetDialog.BackupBeforeWrite,
-                    IterativeOptions = advancedDialog.Options
-                });
-            }
-            else
-            {
-                results = tool.Run(currentState, fieldSelection.SelectedFields, targetDialog.TargetFiles, targetDialog.BackupBeforeWrite);
-            }
-
-            using var summary = new OverwriteSummaryDialog(results, "Overwrite Summary");
+            using var summary = new OverwriteSummaryDialog(execution.Results, "Overwrite Summary");
             summary.ShowDialog(this);
         }
 
@@ -221,23 +276,11 @@ namespace Material_Editor.Forms
             if (template == null)
                 return;
 
-            var descriptors = MaterialFieldRegistry.GetDescriptors(template)
-                .Where(descriptor => descriptor.GetValue(template) is string)
-                .ToList();
-
-            if (descriptors.Count == 0)
-            {
-                MessageBox.Show("No string or path fields are available for variation.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            var currentValues = descriptors.Select(descriptor => descriptor.GetValue(template) as string ?? string.Empty).ToList();
-            using var dialog = new VariationGeneratorDialog(descriptors, currentValues, BuildSuggestedVariationOutputPattern());
-            if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Options == null)
+            WorkflowExecutionResult execution = RunGenerateVariationsWorkflow(template, BuildSuggestedVariationOutputPattern());
+            if (execution?.Results == null)
                 return;
 
-            var results = MaterialVariationGenerator.Generate(template, dialog.Options, serializeToJSONToolStripMenuItem.Checked);
-            using var summary = new OverwriteSummaryDialog(results, "Generation Summary");
+            using var summary = new OverwriteSummaryDialog(execution.Results, "Generation Summary");
             summary.ShowDialog(this);
         }
 
@@ -265,6 +308,9 @@ namespace Material_Editor.Forms
             pendingSingleEditorAppearanceRebuildMaterial = null;
             currentMaterial = null;
             originalMaterial = null;
+            lastSingleEditorUndoState = null;
+            singleEditorUndoStates.Clear();
+            singleEditorRedoStates.Clear();
             workFilePath = string.Empty;
 
             saveToolStripMenuItem.Enabled = false;
@@ -288,9 +334,20 @@ namespace Material_Editor.Forms
             BaseMaterialFile material = CreateMaterialForCurrentType();
             GetMaterialValues(material);
 
-            if (!MaterialFilePersistence.TrySaveMaterial(filePath, material, serializeToJSONToolStripMenuItem.Checked, out _))
+            FieldCopyResult saveResult = MaterialFilePersistence.SaveMaterialResult(
+                filePath,
+                material,
+                serializeToJSONToolStripMenuItem.Checked,
+                "Saved successfully.",
+                config.CreateBackupsByDefault,
+                config);
+            if (saveResult.Status != FieldCopyStatus.Success)
             {
-                MessageBox.Show(string.Format("Failed to save file '{0}'!", filePath), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(
+                    string.Format("Failed to save file '{0}'.{1}{2}", filePath, Environment.NewLine, saveResult.Message),
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
                 return false;
             }
 
@@ -302,8 +359,8 @@ namespace Material_Editor.Forms
 
             currentMaterial = material;
             originalMaterial = CloneMaterial(currentMaterial);
-            changed = false;
-            UpdateWindowTitle();
+            ResetSingleEditorUndoState(currentMaterial);
+            UpdateSingleEditorDirtyState(currentMaterial);
             return true;
         }
 
@@ -332,10 +389,18 @@ namespace Material_Editor.Forms
                 return;
             }
 
-            workFilePath = fileName;
+            OpenMaterialState(fileName, material, material, markDirty: false, loadingText: "Opening material...");
+        }
+
+        private void OpenMaterialState(string filePath, BaseMaterialFile material, BaseMaterialFile baseline, bool markDirty, string loadingText)
+        {
+            if (material == null)
+                return;
+
+            workFilePath = filePath;
             workspaceMode = WorkspaceMode.Single;
 
-            RunWithSingleEditorLoadingOverlay("Opening material...", () =>
+            RunWithSingleEditorLoadingOverlay(loadingText, () =>
             {
                 SuspendAll();
                 try
@@ -358,6 +423,13 @@ namespace Material_Editor.Forms
                     ResumeAll();
                 }
             });
+
+            if (baseline != null)
+                originalMaterial = CloneMaterial(baseline);
+
+            if (!suppressSingleEditorUndoTracking)
+                ResetSingleEditorUndoState(material);
+
             saveToolStripMenuItem.Enabled = true;
             saveAsToolStripMenuItem.Enabled = true;
             closeToolStripMenuItem.Enabled = true;
@@ -365,7 +437,7 @@ namespace Material_Editor.Forms
             layoutMaterial.Enabled = true;
             layoutEffect.Enabled = true;
 
-            changed = false;
+            changed = markDirty;
             UpdateWorkspaceCommandState();
             UpdateWindowTitle();
         }

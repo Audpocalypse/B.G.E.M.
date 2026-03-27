@@ -26,3 +26,17 @@ jobs:
       run: dotnet build --no-restore
     - name: Test
       run: dotnet test --no-build --verbosity normal
+    - name: Pre-release
+      shell: pwsh
+      run: .\scripts\Run-PreRelease.ps1 -Configuration Debug -OutputDirectory ".\artifacts\pre-release"
+    - name: Upload pre-release artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pre-release-summary
+        path: |
+          artifacts/pre-release/pre-release-summary.txt
+          artifacts/pre-release/pre-release.log
+          artifacts/pre-release/validation-summary.txt
+          artifacts/pre-release/validation-report.json
+        if-no-files-found: error

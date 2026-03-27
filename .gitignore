@@ -40,6 +40,12 @@ $RECYCLE.BIN/
 .vscode/
 .dotnet/
 .dotnet-home/
+.codex-build/
+.codex-obj/
+.agents/
+AGENTS.local.md
+AGENTS.*.local.md
+artifacts/
 build.log
 
 # Directories potentially created on remote AFP share

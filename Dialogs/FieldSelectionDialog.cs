@@ -25,6 +25,7 @@ namespace Material_Editor.Dialogs
         private readonly Label descriptionLabel;
         private readonly Label headerLabel;
         private readonly Label descriptionHeaderLabel;
+        private readonly ContextMenuStrip selectionMenu;
         private readonly string descriptionPlaceholder = "Select a field to see a short explanation of what it controls.";
         private readonly Func<MaterialFieldDescriptor, bool> initialSelectionProvider;
         private readonly Config config;
@@ -169,6 +170,12 @@ namespace Material_Editor.Dialogs
                 if (ColorToggleDataGridView.TryHandleSpaceKey(fieldGrid, e))
                     UpdateOkState();
             };
+            selectionMenu = GridSelectionMenuSupport.Attach(
+                fieldGrid,
+                selectAll: () => SetAllChecks(true),
+                selectNone: () => SetAllChecks(false),
+                canSelectAll: () => fieldGrid.Rows.Count > 0,
+                canSelectNone: () => GetCheckedRows().Count > 0);
             mainLayout.Controls.Add(fieldGrid, 0, 1);
             mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
@@ -308,6 +315,18 @@ namespace Material_Editor.Dialogs
         {
             AppearanceApplicator.ApplyToForm(this, appearance);
             AppearanceApplicator.ApplyToContainer(this, appearance, appearance.Theme.Palette.PanelBackground);
+            AppearanceApplicator.ApplyToToolStrip(selectionMenu, appearance);
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.A) && fieldGrid.Rows.Count > 0)
+            {
+                SetAllChecks(true);
+                return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         private void PopulateGrid(IReadOnlyList<MaterialFieldDescriptor> descriptors)

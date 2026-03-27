@@ -1,5 +1,6 @@
 using MaterialLib;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Material_Editor.Controls;
@@ -8,6 +9,24 @@ namespace Material_Editor.Forms
 {
     internal partial class Main
     {
+        private static readonly IReadOnlyDictionary<string, string[]> VisibilityDependencyMap =
+            new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+            {
+                [ControlNames.Refraction] = [ControlNames.RefractionFalloff, ControlNames.RefractionPower],
+                [ControlNames.EnvironmentMapping] = [ControlNames.EnvironmentMaskScale],
+                [ControlNames.SpecularEnabled] = [ControlNames.SpecularColor, ControlNames.SpecularMultiplier],
+                [ControlNames.RimLighting] = [ControlNames.RimPower],
+                [ControlNames.SubsurfaceLighting] = [ControlNames.SubsurfaceLightingRolloff],
+                [ControlNames.EmittanceEnabled] = [ControlNames.EmittanceColor, ControlNames.EmittanceMultiplier],
+                [ControlNames.AdaptativeEmissive] = [ControlNames.AdaptEmissiveExposureOffset, ControlNames.AdaptEmissiveFinalExposureMin, ControlNames.AdaptEmissiveFinalExposureMax],
+                [ControlNames.Hair] = [ControlNames.HairTintColor],
+                [ControlNames.Tessellate] = [ControlNames.DisplacementTexBias, ControlNames.DisplacementTexScale, ControlNames.TessellationPNScale, ControlNames.TessellationBaseFactor, ControlNames.TessellationFadeDistance],
+                [ControlNames.Terrain] = [ControlNames.UnkInt1BGSM, ControlNames.TerrainThresholdFalloff, ControlNames.TerrainTilingDistance, ControlNames.TerrainRotationAngle],
+                [ControlNames.FalloffEnabled] = [ControlNames.FalloffStartAngle, ControlNames.FalloffStopAngle, ControlNames.FalloffStartOpacity, ControlNames.FalloffStopOpacity],
+                [ControlNames.SoftEnabled] = [ControlNames.SoftDepth],
+                [ControlNames.GlassEnabled] = [ControlNames.GlassFresnelColor, ControlNames.GlassBlurScaleBase, ControlNames.GlassBlurScaleFactor, ControlNames.GlassRefractionScaleBase]
+            };
+
         private bool TryReuseMaterialControls(BaseMaterialFile file)
         {
             if (file == null
@@ -18,10 +37,12 @@ namespace Material_Editor.Forms
                 return false;
             }
 
+            string[] changedControls = GetChangedSingleEditorControlNames(currentMaterial, file);
+            bool requiresFullVisibilityRefresh = currentMaterial.Version != file.Version;
+
             CopyMaterialState(file, currentMaterial);
             ApplyMaterialToExistingControls(currentMaterial);
-            ControlFactory.UpdateVisibility();
-            ApplyCurrentAppearance();
+            RefreshReusedControlVisibility(changedControls, requiresFullVisibilityRefresh);
             originalMaterial = CloneMaterial(currentMaterial);
             return true;
         }
@@ -52,6 +73,29 @@ namespace Material_Editor.Forms
 
             foreach (PropertyInfo property in properties)
                 property.SetValue(target, property.GetValue(source));
+        }
+
+        private void RefreshReusedControlVisibility(IEnumerable<string> changedControls, bool requiresFullVisibilityRefresh)
+        {
+            if (requiresFullVisibilityRefresh)
+            {
+                ControlFactory.UpdateVisibility();
+                return;
+            }
+
+            var targetNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string controlName in changedControls ?? Array.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(controlName))
+                    continue;
+
+                targetNames.Add(controlName);
+                if (VisibilityDependencyMap.TryGetValue(controlName, out string[] dependents))
+                    targetNames.UnionWith(dependents);
+            }
+
+            if (targetNames.Count > 0)
+                ControlFactory.UpdateVisibility(targetNames.ToArray());
         }
 
         private void ApplyMaterialToExistingControls(BaseMaterialFile file)

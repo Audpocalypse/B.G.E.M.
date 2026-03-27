@@ -20,7 +20,7 @@ namespace Material_Editor.Dialogs
 
         public BulkDirtyFileRemovalDialog(int dirtyFileCount, string actionDescription = null)
         {
-            Text = "Unsaved Bulk Changes";
+            Text = "Unsaved Changes";
             AutoScaleMode = AutoScaleMode.Font;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;
@@ -136,9 +136,12 @@ namespace Material_Editor.Dialogs
 
         private string BuildDescription(int dirtyFileCount)
         {
+            string fileLabel = dirtyFileCount == 1 ? "file" : "files";
+            string subjectLabel = dirtyFileCount == 1 ? "that file" : "those files";
+
             return
-                $"You are about to {actionDescription} with {dirtyFileCount} file(s) containing unapplied edits.{Environment.NewLine}" +
-                $"Save writes those files before continuing. Discard drops the edits. If you remember this choice, the same action will happen automatically until you change it back in Settings.";
+                $"You are about to {actionDescription} with {dirtyFileCount} {fileLabel} containing unapplied edits.{Environment.NewLine}" +
+                $"Save writes {subjectLabel} before continuing. Discard drops the edits. If you remember this choice, the same action will happen automatically until you change it back in Settings.";
         }
     }
 }

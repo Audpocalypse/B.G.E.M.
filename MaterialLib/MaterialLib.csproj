@@ -6,4 +6,16 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove=".codex-*\**" />
+    <Compile Remove="artifacts\**" />
+    <Compile Remove="obj\verify\**" />
+    <EmbeddedResource Remove=".codex-*\**" />
+    <EmbeddedResource Remove="artifacts\**" />
+    <EmbeddedResource Remove="obj\verify\**" />
+    <None Remove=".codex-*\**" />
+    <None Remove="artifacts\**" />
+    <None Remove="obj\verify\**" />
+  </ItemGroup>
+
 </Project>

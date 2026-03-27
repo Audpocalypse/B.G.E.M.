@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Material_Editor.AdvancedVariant;
+using Material_Editor.Models;
 
 namespace Material_Editor.Services
 {
@@ -11,6 +12,7 @@ namespace Material_Editor.Services
         public IReadOnlyList<MaterialFieldDescriptor> Descriptors { get; init; } = Array.Empty<MaterialFieldDescriptor>();
         public IReadOnlyList<string> TargetFiles { get; init; } = Array.Empty<string>();
         public bool BackupBeforeWrite { get; init; }
+        public Config Config { get; init; }
         public IterativeFieldOverwriteOptions IterativeOptions { get; init; }
     }
 

@@ -11,6 +11,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove=".codex-*\**" />
+    <Compile Remove="artifacts\verify\**" />
+    <Compile Remove="obj\verify\**" />
+    <EmbeddedResource Remove=".codex-*\**" />
+    <EmbeddedResource Remove="artifacts\verify\**" />
+    <EmbeddedResource Remove="obj\verify\**" />
+    <None Remove=".codex-*\**" />
+    <None Remove="artifacts\verify\**" />
+    <None Remove="obj\verify\**" />
     <ProjectReference Include="..\Material Editor.csproj" />
   </ItemGroup>
 

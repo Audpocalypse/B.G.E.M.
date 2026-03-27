@@ -46,6 +46,7 @@ namespace Material_Editor.Dialogs
         private readonly Label summaryLabel;
         private readonly Label validationLabel;
         private readonly Button okButton;
+        private readonly ColorToggleCheckBox returnToBulkEditorCheckBox;
         private readonly Button addRuleButton;
         private readonly Button deleteRuleButton;
         private readonly Button moveRuleUpButton;
@@ -66,7 +67,8 @@ namespace Material_Editor.Dialogs
         public VariationGeneratorDialog(
             IReadOnlyList<MaterialFieldDescriptor> descriptors,
             IReadOnlyList<string> currentValues,
-            string suggestedOutputPattern)
+            string suggestedOutputPattern,
+            bool allowReturnToBulkEditor = false)
         {
             if (descriptors == null)
                 throw new ArgumentNullException(nameof(descriptors));
@@ -472,6 +474,17 @@ namespace Material_Editor.Dialogs
             validationLabel = DialogLayoutSupport.CreateWrappingLabel(string.Empty, new Padding(0));
             footerMessageLayout.Controls.Add(validationLabel, 0, 1);
 
+            returnToBulkEditorCheckBox = new ColorToggleCheckBox
+            {
+                Text = "Add successful generated files to the current bulk editor",
+                AutoSize = true,
+                Checked = allowReturnToBulkEditor,
+                Visible = allowReturnToBulkEditor,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, allowReturnToBulkEditor ? 8 : 0, 12, 0)
+            };
+            footerMessageLayout.Controls.Add(returnToBulkEditorCheckBox, 0, 2);
+
             footerLayout.Controls.Add(footerMessageLayout, 0, 0);
 
             var buttonPanel = new FlowLayoutPanel
@@ -571,6 +584,7 @@ namespace Material_Editor.Dialogs
         }
 
         public MaterialVariationOptions Options { get; private set; }
+        public bool AddResultsToCurrentBulkEditor => returnToBulkEditorCheckBox.Checked;
 
         private bool IsAdvancedMode => advancedModeCheckBox.Checked;
 

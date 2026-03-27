@@ -4,7 +4,6 @@ using Material_Editor.Services;
 using Material_Editor.Theming;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
@@ -25,7 +24,11 @@ namespace Material_Editor.Controls
                 [ControlNames.AdaptativeEmissive] = new[] { ControlNames.AdaptEmissiveExposureOffset, ControlNames.AdaptEmissiveFinalExposureMin, ControlNames.AdaptEmissiveFinalExposureMax },
                 [ControlNames.Hair] = new[] { ControlNames.HairTintColor },
                 [ControlNames.Tessellate] = new[] { ControlNames.DisplacementTexBias, ControlNames.DisplacementTexScale, ControlNames.TessellationPNScale, ControlNames.TessellationBaseFactor, ControlNames.TessellationFadeDistance },
-                [ControlNames.Terrain] = new[] { ControlNames.UnkInt1BGSM, ControlNames.TerrainThresholdFalloff, ControlNames.TerrainTilingDistance, ControlNames.TerrainRotationAngle }
+                [ControlNames.Terrain] = new[] { ControlNames.UnkInt1BGSM, ControlNames.TerrainThresholdFalloff, ControlNames.TerrainTilingDistance, ControlNames.TerrainRotationAngle },
+                [ControlNames.EnvMapping] = new[] { ControlNames.EnvMappingMaskScale },
+                [ControlNames.GlassEnabled] = new[] { ControlNames.GlassFresnelColor, ControlNames.GlassBlurScaleBase, ControlNames.GlassBlurScaleFactor, ControlNames.GlassRefractionScaleBase },
+                [ControlNames.FalloffEnabled] = new[] { ControlNames.FalloffStartAngle, ControlNames.FalloffStopAngle, ControlNames.FalloffStartOpacity, ControlNames.FalloffStopOpacity },
+                [ControlNames.SoftEnabled] = new[] { ControlNames.SoftDepth }
             };
 
         private static readonly IReadOnlySet<string> AutoManagedFieldLabels =
@@ -41,6 +44,8 @@ namespace Material_Editor.Controls
         private readonly Label validationLabel;
         private readonly Button chooseFieldsButton;
         private readonly ColorToggleCheckBox backupCheckBox;
+        private readonly ContextMenuStrip fileContextMenu;
+        private readonly ContextMenuStrip fieldContextMenu;
         private readonly Dictionary<(string FilePath, string Label), string> invalidCellTexts = new();
         private readonly Dictionary<(string FilePath, string Label), bool> pendingBooleanOverrides = new();
         private readonly HashSet<string> pendingDirtyRowPaths = new(StringComparer.OrdinalIgnoreCase);
@@ -52,6 +57,26 @@ namespace Material_Editor.Controls
         private List<MaterialFieldDescriptor> selectedDescriptors = new();
         private ComboBox activeComboEditingControl;
         private bool suppressGridEvents;
+        private int selectionAnchorRowIndex = -1;
+        private int selectionAnchorColumnIndex = -1;
+        private int rowDragAnchorIndex = -1;
+        private bool rowDragActive;
+        private bool rowDragAdditive;
+        private int fieldDragAnchorRowIndex = -1;
+        private int fieldDragAnchorColumnIndex = -1;
+        private bool fieldDragActive;
+        private bool fieldDragAdditive;
+        private int dragCurrentRowIndex = -1;
+        private int dragCurrentColumnIndex = -1;
+        private int contextRowIndex = -1;
+        private int contextColumnIndex = -1;
+        private bool dragPreviewActive;
+        private bool dragPreviewRowMode;
+        private int dragPreviewStartRowIndex = -1;
+        private int dragPreviewStartColumnIndex = -1;
+        private int dragPreviewEndRowIndex = -1;
+        private int dragPreviewEndColumnIndex = -1;
+        private int selectionRefreshSuppressionDepth;
 
         public BulkMaterialEditorView()
         {
@@ -91,9 +116,9 @@ namespace Material_Editor.Controls
                 AutoGenerateColumns = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None,
                 RowHeadersVisible = false,
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                SelectionMode = DataGridViewSelectionMode.CellSelect,
                 MultiSelect = true,
-                EditMode = DataGridViewEditMode.EditOnEnter,
+                EditMode = DataGridViewEditMode.EditProgrammatically,
                 ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
                 ShowCellToolTips = true,
                 ClipboardCopyMode = DataGridViewClipboardCopyMode.EnableWithoutHeaderText
@@ -106,10 +131,19 @@ namespace Material_Editor.Controls
             grid.CellToolTipTextNeeded += Grid_CellToolTipTextNeeded;
             grid.DataError += Grid_DataError;
             grid.EditingControlShowing += Grid_EditingControlShowing;
+            grid.CellMouseDown += Grid_CellMouseDown;
+            grid.CellMouseEnter += Grid_CellMouseEnter;
             grid.CellMouseUp += Grid_CellMouseUp;
-            grid.SelectionChanged += (s, e) => RefreshSummary();
+            grid.CellDoubleClick += Grid_CellDoubleClick;
+            grid.MouseMove += Grid_MouseMove;
+            grid.MouseUp += Grid_MouseUp;
+            grid.Paint += Grid_Paint;
+            grid.SelectionChanged += Grid_SelectionChanged;
             grid.KeyDown += Grid_KeyDown;
             mainLayout.Controls.Add(grid, 0, 1);
+
+            fileContextMenu = CreateFileContextMenu();
+            fieldContextMenu = CreateFieldContextMenu();
 
             var footerLayout = new TableLayoutPanel
             {
@@ -158,7 +192,7 @@ namespace Material_Editor.Controls
 
             backupCheckBox = new ColorToggleCheckBox
             {
-                Text = "Create .bak backups",
+                Text = "Create timestamped backups in backup folder",
                 AutoSize = true,
                 Checked = true,
                 Margin = new Padding(0, 6, 12, 0)
@@ -178,27 +212,47 @@ namespace Material_Editor.Controls
         }
 
         public event EventHandler StateChanged;
+        public event EventHandler SaveFilesRequested;
+        public event EventHandler SaveFilesAsRequested;
+        public event EventHandler CloseFilesRequested;
+        public event EventHandler RevealInExplorerRequested;
+        public event EventHandler ReloadFilesRequested;
+        public event EventHandler SendToSingleEditorRequested;
+        public event EventHandler SendToGenerateVariationsRequested;
+        public event EventHandler SendToOverwriteFilesRequested;
 
         public BulkMaterialEditSession Session => session;
         public bool BackupBeforeWrite => backupCheckBox.Checked;
         public IReadOnlyList<MaterialFieldDescriptor> SelectedDescriptors => selectedDescriptors;
         public bool HasDirtyRows => session != null && session.Rows.Any(IsRowEffectivelyDirty);
         public int DirtyRowCount => session?.Rows.Count(IsRowEffectivelyDirty) ?? 0;
-        public IReadOnlyList<BulkMaterialEditRow> SelectedRows => grid.SelectedRows
-            .Cast<DataGridViewRow>()
-            .Select(row => row.Tag as BulkMaterialEditRow)
-            .Where(row => row != null)
-            .Distinct()
-            .ToArray();
+        public IReadOnlyList<BulkMaterialEditRow> SelectedRows => GetOrderedSelectedRows();
 
         public int SelectedDirtyRowCount => SelectedRows.Count(IsRowEffectivelyDirty);
         public int SelectedRowCount => SelectedRows.Count;
+        public bool CanFindSelection => session != null;
+        public bool CanFindReplaceSelection => session != null;
+        public bool CanUndo => session?.CanUndo == true;
+        public bool CanRedo => session?.CanRedo == true;
+        public bool CanEditOrToggleSelection => TryGetEditOrToggleMenuText(GetSelectedFieldCells(editableOnly: true), out _);
+        public bool CanCutFieldsSelection => GetSelectedFieldCells(editableOnly: true).Count > 0;
+        public bool CanCutRowsSelection => SelectedRows.Count > 0;
+        public bool CanCopyRowsSelection => SelectedRows.Count > 0;
+        public bool CanCopyFieldsSelection => GetSelectedFieldCells(editableOnly: false).Count > 0;
+        public bool CanPasteRowsSelection => SelectedRows.Count > 0 && TryGetClipboardMatrix(out _);
+        public bool CanPasteFieldsSelection => GetSelectedFieldCells(editableOnly: true).Count > 0 && TryGetClipboardMatrix(out _);
+        public bool CanClearSelection => GetSelectedFieldCells(editableOnly: true).Count > 0;
+        public bool CanSelectAll => session != null && grid.Rows.Count > 0;
+        public bool CanSelectCurrentRow => session != null && grid.CurrentCell != null && grid.CurrentCell.RowIndex >= 0;
+        public bool CanSelectDirtyRows => session?.Rows.Any(IsRowEffectivelyDirty) == true;
+        public bool CanSelectErrorRows => session?.Rows.Any(row => row.HasLoadError || row.HasValidationErrors) == true;
 
         public void Initialize(BulkMaterialEditSession session, Config config, bool backupBeforeWrite)
         {
             this.session = session ?? throw new ArgumentNullException(nameof(session));
             this.config = config;
             backupCheckBox.Checked = backupBeforeWrite;
+            ResetProjectionState();
             selectedLabelPreferences = BuildDefaultSelectedLabelPreferences(session);
             invalidCellTexts.Clear();
             pendingBooleanOverrides.Clear();
@@ -212,11 +266,26 @@ namespace Material_Editor.Controls
         public void ClearSession()
         {
             session = null;
+            ResetProjectionState();
             selectedLabelPreferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             selectedDescriptors = new List<MaterialFieldDescriptor>();
             invalidCellTexts.Clear();
             pendingBooleanOverrides.Clear();
             pendingDirtyRowPaths.Clear();
+            selectionAnchorRowIndex = -1;
+            selectionAnchorColumnIndex = -1;
+            rowDragAnchorIndex = -1;
+            rowDragActive = false;
+            rowDragAdditive = false;
+            fieldDragAnchorRowIndex = -1;
+            fieldDragAnchorColumnIndex = -1;
+            fieldDragActive = false;
+            fieldDragAdditive = false;
+            dragCurrentRowIndex = -1;
+            dragCurrentColumnIndex = -1;
+            contextRowIndex = -1;
+            contextColumnIndex = -1;
+            ClearDragSelectionPreview();
             grid.Rows.Clear();
             grid.Columns.Clear();
             summaryLabel.Text = string.Empty;
@@ -225,12 +294,31 @@ namespace Material_Editor.Controls
             OnStateChanged();
         }
 
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (activeComboEditingControl != null)
+                {
+                    activeComboEditingControl.DrawItem -= ComboEditingControl_DrawItem;
+                    activeComboEditingControl = null;
+                }
+
+                grid.ContextMenuStrip = null;
+                fileContextMenu?.Dispose();
+                fieldContextMenu?.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+
         protected override void ApplyAppearance(AppearanceDefinition appearance)
         {
             this.theme = appearance.Theme;
             AppearanceApplicator.ApplyToContainer(this, appearance, appearance.Theme.Palette.FormBackground);
             validationLabel.ForeColor = string.IsNullOrEmpty(validationLabel.Text) ? appearance.Theme.Palette.Foreground : appearance.Theme.Semantics.Error;
             ApplyGridThemeStyles();
+            ApplyContextMenuTheme(appearance);
         }
 
         private ThemeDefinition RequireTheme()
@@ -265,7 +353,8 @@ namespace Material_Editor.Controls
                 return Array.Empty<FieldCopyResult>();
 
             CommitPendingEdits();
-            var results = session.ApplyChanges(BackupBeforeWrite);
+            ClearStaleValidationErrors(visibleRows);
+            var results = session.ApplySelectedChanges(visibleRows, BackupBeforeWrite, config);
             RebuildGrid();
             RefreshSummary();
             return results;
@@ -278,7 +367,8 @@ namespace Material_Editor.Controls
 
             CommitPendingEdits();
             var selectedRows = SelectedRows;
-            var results = session.ApplySelectedChanges(selectedRows, BackupBeforeWrite);
+            ClearStaleValidationErrors(selectedRows);
+            var results = session.ApplySelectedChanges(selectedRows, BackupBeforeWrite, config);
             RebuildGrid();
             ReselectRows(selectedRows.Select(row => row.FilePath));
             RefreshSummary();
@@ -288,6 +378,116 @@ namespace Material_Editor.Controls
         public bool IsDirtyRow(BulkMaterialEditRow row)
         {
             return IsRowEffectivelyDirty(row);
+        }
+
+        public void SelectFileRows(IEnumerable<string> filePaths)
+        {
+            ReselectRows(filePaths);
+            RefreshSummary();
+        }
+
+        public void ExecuteFindSelection()
+        {
+            OpenFindDialog(replaceMode: false);
+        }
+
+        public void ExecuteFindReplaceSelection()
+        {
+            OpenFindDialog(replaceMode: true);
+        }
+
+        public bool ExecuteUndo()
+        {
+            return UndoLastChange();
+        }
+
+        public bool ExecuteRedo()
+        {
+            return RedoLastChange();
+        }
+
+        public void ExecuteEditOrToggleSelection()
+        {
+            EditOrToggleSelectedCells();
+        }
+
+        public void ExecuteCutFields()
+        {
+            CutSelectedFieldsToClipboard();
+        }
+
+        public void ExecuteCopyRows()
+        {
+            CopySelectedRowsToClipboard();
+        }
+
+        public void ExecuteCutRows()
+        {
+            CutSelectedRowsToClipboard();
+        }
+
+        public void ExecuteCopyFields()
+        {
+            CopySelectedFieldsToClipboard();
+        }
+
+        public void ExecutePasteRows()
+        {
+            PasteRowsFromClipboard();
+        }
+
+        public void ExecutePasteFields()
+        {
+            PasteFieldsFromClipboard();
+        }
+
+        public void ExecuteClearSelection()
+        {
+            ClearSelectedFields();
+        }
+
+        public void ExecuteSelectAll()
+        {
+            if (grid.Rows.Count == 0)
+                return;
+
+            grid.SelectAll();
+            RefreshSummary();
+        }
+
+        public void ExecuteSelectCurrentRow()
+        {
+            SelectCurrentRow();
+        }
+
+        public void ExecuteSelectPageAbove()
+        {
+            SelectCurrentViewportPage(direction: -1);
+        }
+
+        public void ExecuteSelectPageBelow()
+        {
+            SelectCurrentViewportPage(direction: 1);
+        }
+
+        public void ExecuteSelectAllAbove()
+        {
+            SelectToBoundary(direction: -1);
+        }
+
+        public void ExecuteSelectAllBelow()
+        {
+            SelectToBoundary(direction: 1);
+        }
+
+        public void ExecuteSelectDirtyRows()
+        {
+            SelectRowsByPredicate(IsRowEffectivelyDirty);
+        }
+
+        public void ExecuteSelectErrorRows()
+        {
+            SelectRowsByPredicate(row => row.HasLoadError || row.HasValidationErrors);
         }
 
         public void ChooseFields(IWin32Window owner)
@@ -316,6 +516,51 @@ namespace Material_Editor.Controls
             RefreshVisibleDescriptorsAndGrid();
         }
 
+        public void ClearStaleValidationErrors(IEnumerable<BulkMaterialEditRow> targetRows = null)
+        {
+            if (session == null)
+                return;
+
+            IReadOnlyCollection<BulkMaterialEditRow> rowsToCheck = (targetRows ?? session.Rows)
+                .Where(row => row != null)
+                .Distinct()
+                .ToArray();
+            if (rowsToCheck.Count == 0)
+                return;
+
+            foreach (BulkMaterialEditRow row in rowsToCheck)
+            {
+                bool rowIsClean = !row.IsDirty;
+                foreach (BulkMaterialEditCellState cell in row.Cells)
+                {
+                    if (cell == null)
+                        continue;
+
+                    (string FilePath, string Label) key = (row.FilePath, cell.Descriptor.Label);
+                    bool hasInvalidUiText = invalidCellTexts.ContainsKey(key);
+                    bool hasPendingBoolean = pendingBooleanOverrides.ContainsKey(key);
+
+                    if (rowIsClean)
+                    {
+                        invalidCellTexts.Remove(key);
+                        pendingBooleanOverrides.Remove(key);
+                        cell.ClearError();
+                        continue;
+                    }
+
+                    if (!cell.HasError)
+                        continue;
+
+                    if (hasInvalidUiText || hasPendingBoolean)
+                        continue;
+
+                    cell.ClearError();
+                }
+
+                row.RefreshDynamicState();
+            }
+        }
+
         private void RebuildGrid()
         {
             suppressGridEvents = true;
@@ -324,6 +569,7 @@ namespace Material_Editor.Controls
                 grid.SuspendLayout();
                 grid.Rows.Clear();
                 grid.Columns.Clear();
+                visibleRows = BuildVisibleRows();
 
                 if (session == null)
                     return;
@@ -356,7 +602,7 @@ namespace Material_Editor.Controls
                 foreach (MaterialFieldDescriptor descriptor in selectedDescriptors)
                     grid.Columns.Add(CreateFieldColumn(descriptor));
 
-                foreach (BulkMaterialEditRow row in session.Rows)
+                foreach (BulkMaterialEditRow row in visibleRows)
                 {
                     int rowIndex = grid.Rows.Add();
                     var gridRow = grid.Rows[rowIndex];
@@ -403,7 +649,7 @@ namespace Material_Editor.Controls
         {
             gridRow.Cells[DirtyColumnName].Value = IsRowEffectivelyDirty(row) ? "*" : string.Empty;
             gridRow.Cells[VersionColumnName].Value = row.HasLoadError ? string.Empty : row.Version.ToString();
-            gridRow.Cells[PathColumnName].Value = GetDisplayFilePath(row.FilePath);
+            gridRow.Cells[PathColumnName].Value = row.DisplayPath;
             gridRow.Cells[PathColumnName].ToolTipText = row.FilePath;
 
             foreach (MaterialFieldDescriptor descriptor in selectedDescriptors)
@@ -524,12 +770,64 @@ namespace Material_Editor.Controls
             e.Cancel = false;
         }
 
+        private void Grid_CellMouseDown(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            HandleGridCellMouseDown(e);
+        }
+
+        private void Grid_CellMouseEnter(object sender, DataGridViewCellEventArgs e)
+        {
+            HandleGridCellMouseEnter(e);
+        }
+
         private void Grid_CellMouseUp(object sender, DataGridViewCellMouseEventArgs e)
         {
-            if (suppressGridEvents || session == null)
+            HandleGridCellMouseUp(e);
+        }
+
+        private void Grid_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (suppressGridEvents || session == null || e.RowIndex < 0 || e.ColumnIndex < 0)
                 return;
 
-            TryToggleBooleanCell(e.RowIndex, e.ColumnIndex);
+            MaterialFieldDescriptor descriptor = TryGetFieldDescriptor(grid.Columns[e.ColumnIndex].Name);
+            if (descriptor == null)
+                return;
+
+            if (descriptor.EditorKind == BulkFieldEditorKind.Boolean)
+            {
+                TryToggleBooleanCell(e.RowIndex, e.ColumnIndex);
+                return;
+            }
+
+            if (grid.Rows[e.RowIndex].Cells[e.ColumnIndex].ReadOnly)
+                return;
+
+            SelectSingleCell(e.RowIndex, e.ColumnIndex);
+            BeginEditCurrentCellOrOpenDialog();
+        }
+
+        private void Grid_MouseMove(object sender, MouseEventArgs e)
+        {
+            HandleGridMouseMove(e);
+        }
+
+        private void Grid_MouseUp(object sender, MouseEventArgs e)
+        {
+            HandleGridMouseUp(e);
+        }
+
+        private void Grid_Paint(object sender, PaintEventArgs e)
+        {
+            PaintDragSelectionPreview(e.Graphics);
+        }
+
+        private void Grid_SelectionChanged(object sender, EventArgs e)
+        {
+            if (selectionRefreshSuppressionDepth > 0)
+                return;
+
+            RefreshSummary();
         }
 
         private void Grid_EditingControlShowing(object sender, DataGridViewEditingControlShowingEventArgs e)
@@ -594,7 +892,20 @@ namespace Material_Editor.Controls
 
         private void Grid_KeyDown(object sender, KeyEventArgs e)
         {
-            if (grid.CurrentCell != null && TryToggleBooleanCell(grid.CurrentCell.RowIndex, grid.CurrentCell.ColumnIndex, e))
+            if (HandleGridEditShortcut(e))
+                return;
+
+            if (HandleGridSelectionShortcut(e))
+                return;
+
+            if (HandleGridClipboardShortcut(e))
+                return;
+
+            if (grid.CurrentCell != null
+                && e.KeyCode == Keys.Space
+                && !e.Control
+                && !e.Alt
+                && TryToggleBooleanCell(grid.CurrentCell.RowIndex, grid.CurrentCell.ColumnIndex, e))
                 return;
 
             if (e.Control && e.KeyCode == Keys.A)
@@ -605,40 +916,6 @@ namespace Material_Editor.Controls
                 RefreshSummary();
                 return;
             }
-
-            if (grid.Rows.Count == 0 || grid.CurrentCell == null || !e.Shift)
-                return;
-
-            int currentRowIndex = grid.CurrentCell.RowIndex;
-            if (e.KeyCode == Keys.Home)
-            {
-                SelectRange(0, currentRowIndex);
-                e.Handled = true;
-                e.SuppressKeyPress = true;
-            }
-            else if (e.KeyCode == Keys.End)
-            {
-                SelectRange(currentRowIndex, grid.Rows.Count - 1);
-                e.Handled = true;
-                e.SuppressKeyPress = true;
-            }
-        }
-
-        private void SelectRange(int startIndex, int endIndex)
-        {
-            startIndex = Math.Max(0, startIndex);
-            endIndex = Math.Min(grid.Rows.Count - 1, endIndex);
-            if (startIndex > endIndex)
-                (startIndex, endIndex) = (endIndex, startIndex);
-
-            grid.ClearSelection();
-            for (int index = startIndex; index <= endIndex; index++)
-                grid.Rows[index].Selected = true;
-
-            if (grid.Rows.Count > 0)
-                grid.CurrentCell = grid.Rows[endIndex].Cells[Math.Min(2, grid.Columns.Count - 1)];
-
-            RefreshSummary();
         }
 
         private void ApplyCellEdit(int rowIndex, MaterialFieldDescriptor descriptor, object inputValueOverride = null)
@@ -669,7 +946,11 @@ namespace Material_Editor.Controls
 
             int loadedCount = session.Rows.Count(row => !row.HasLoadError);
             int loadErrorCount = session.Rows.Count(row => row.HasLoadError);
-            summaryLabel.Text = $"{loadedCount} loaded, {DirtyRowCount} dirty, {SelectedDirtyRowCount} selected dirty, {session.ErrorRowCount} with validation errors, {loadErrorCount} failed to load. {SelectedRowCount} row(s) selected. Backups {(backupCheckBox.Checked ? "on" : "off")}.";
+            int visibleLoadedCount = visibleRows.Count(row => !row.HasLoadError);
+            int visibleDirtyCount = visibleRows.Count(IsRowEffectivelyDirty);
+            int visibleErrorCount = visibleRows.Count(row => row.HasValidationErrors);
+            int visibleLoadErrorCount = visibleRows.Count(row => row.HasLoadError);
+            summaryLabel.Text = $"Filter: {GetFilterDisplayName(ActiveFilter)}. {visibleRows.Count} shown of {session.Rows.Count}, {visibleLoadedCount} loaded shown, {visibleDirtyCount} dirty shown, {SelectedDirtyRowCount} selected dirty, {visibleErrorCount} shown with validation errors, {visibleLoadErrorCount} shown failed to load. {SelectedRowCount} row(s) selected. Backups {(backupCheckBox.Checked ? "on" : "off")}.";
 
             validationLabel.Text = session.HasValidationErrors
                 ? "Validation errors are blocking save for affected rows."
@@ -688,24 +969,6 @@ namespace Material_Editor.Controls
         private static string GetFieldColumnName(string label)
         {
             return $"field::{label}";
-        }
-
-        private static string GetDisplayFilePath(string filePath)
-        {
-            if (string.IsNullOrWhiteSpace(filePath))
-                return string.Empty;
-
-            const string materialsBackslash = "materials\\";
-            const string materialsSlash = "materials/";
-            int index = filePath.IndexOf(materialsBackslash, StringComparison.OrdinalIgnoreCase);
-            if (index >= 0)
-                return filePath[(index + materialsBackslash.Length)..];
-
-            index = filePath.IndexOf(materialsSlash, StringComparison.OrdinalIgnoreCase);
-            if (index >= 0)
-                return filePath[(index + materialsSlash.Length)..];
-
-            return filePath;
         }
 
         private static HashSet<string> BuildDefaultSelectedLabelPreferences(BulkMaterialEditSession session)
@@ -844,6 +1107,145 @@ namespace Material_Editor.Controls
             ApplyGridSizing();
         }
 
+        private void UpdateDragSelectionPreview(bool rowMode, int startRowIndex, int startColumnIndex, int endRowIndex, int endColumnIndex)
+        {
+            Rectangle previousBounds = GetDragSelectionPreviewBounds();
+            dragPreviewActive = true;
+            dragPreviewRowMode = rowMode;
+            dragPreviewStartRowIndex = startRowIndex;
+            dragPreviewStartColumnIndex = startColumnIndex;
+            dragPreviewEndRowIndex = endRowIndex;
+            dragPreviewEndColumnIndex = endColumnIndex;
+            InvalidateDragSelectionPreview(previousBounds, GetDragSelectionPreviewBounds());
+        }
+
+        private void ClearDragSelectionPreview()
+        {
+            Rectangle previousBounds = GetDragSelectionPreviewBounds();
+            dragPreviewActive = false;
+            dragPreviewRowMode = false;
+            dragPreviewStartRowIndex = -1;
+            dragPreviewStartColumnIndex = -1;
+            dragPreviewEndRowIndex = -1;
+            dragPreviewEndColumnIndex = -1;
+            InvalidateDragSelectionPreview(previousBounds, Rectangle.Empty);
+        }
+
+        private void InvalidateDragSelectionPreview(Rectangle previousBounds, Rectangle nextBounds)
+        {
+            Rectangle invalidationBounds = previousBounds;
+            if (!nextBounds.IsEmpty)
+                invalidationBounds = invalidationBounds.IsEmpty ? nextBounds : Rectangle.Union(invalidationBounds, nextBounds);
+
+            if (invalidationBounds.IsEmpty)
+                return;
+
+            invalidationBounds.Inflate(2, 2);
+            grid.Invalidate(invalidationBounds);
+        }
+
+        private Rectangle GetDragSelectionPreviewBounds()
+        {
+            if (!dragPreviewActive
+                || grid.Rows.Count == 0
+                || grid.Columns.Count == 0
+                || dragPreviewStartRowIndex < 0
+                || dragPreviewEndRowIndex < 0)
+            {
+                return Rectangle.Empty;
+            }
+
+            int startRowIndex = Math.Max(0, Math.Min(dragPreviewStartRowIndex, dragPreviewEndRowIndex));
+            int endRowIndex = Math.Min(grid.Rows.Count - 1, Math.Max(dragPreviewStartRowIndex, dragPreviewEndRowIndex));
+
+            Rectangle topRowBounds = grid.GetRowDisplayRectangle(startRowIndex, true);
+            Rectangle bottomRowBounds = grid.GetRowDisplayRectangle(endRowIndex, true);
+            if (topRowBounds.Height <= 0 || bottomRowBounds.Height <= 0)
+                return Rectangle.Empty;
+
+            if (dragPreviewRowMode)
+            {
+                Rectangle visibleColumnsBounds = GetVisibleColumnBounds();
+                if (visibleColumnsBounds.Width <= 0)
+                    return Rectangle.Empty;
+
+                return Rectangle.FromLTRB(
+                    visibleColumnsBounds.Left,
+                    topRowBounds.Top,
+                    visibleColumnsBounds.Right,
+                    bottomRowBounds.Bottom);
+            }
+
+            int startColumnIndex = Math.Max(0, Math.Min(dragPreviewStartColumnIndex, dragPreviewEndColumnIndex));
+            int endColumnIndex = Math.Min(grid.Columns.Count - 1, Math.Max(dragPreviewStartColumnIndex, dragPreviewEndColumnIndex));
+            Rectangle leftColumnBounds = grid.GetColumnDisplayRectangle(startColumnIndex, true);
+            Rectangle rightColumnBounds = grid.GetColumnDisplayRectangle(endColumnIndex, true);
+            if (leftColumnBounds.Width <= 0 || rightColumnBounds.Width <= 0)
+                return Rectangle.Empty;
+
+            return Rectangle.FromLTRB(
+                leftColumnBounds.Left,
+                topRowBounds.Top,
+                rightColumnBounds.Right,
+                bottomRowBounds.Bottom);
+        }
+
+        private Rectangle GetVisibleColumnBounds()
+        {
+            int left = int.MaxValue;
+            int right = int.MinValue;
+            foreach (DataGridViewColumn column in grid.Columns)
+            {
+                if (!column.Visible)
+                    continue;
+
+                Rectangle bounds = grid.GetColumnDisplayRectangle(column.Index, true);
+                if (bounds.Width <= 0)
+                    continue;
+
+                left = Math.Min(left, bounds.Left);
+                right = Math.Max(right, bounds.Right);
+            }
+
+            return left == int.MaxValue || right <= left
+                ? Rectangle.Empty
+                : Rectangle.FromLTRB(left, 0, right, grid.Height);
+        }
+
+        private void PaintDragSelectionPreview(Graphics graphics)
+        {
+            Rectangle previewBounds = GetDragSelectionPreviewBounds();
+            if (previewBounds.IsEmpty)
+                return;
+
+            Color selectionColor = grid.DefaultCellStyle.SelectionBackColor;
+            if (selectionColor.IsEmpty)
+                selectionColor = RequireTheme().Palette.Accent;
+
+            using var fillBrush = new SolidBrush(Color.FromArgb(96, selectionColor));
+            using var borderPen = new Pen(selectionColor);
+            graphics.FillRectangle(fillBrush, previewBounds);
+            graphics.DrawRectangle(borderPen, previewBounds.Left, previewBounds.Top, Math.Max(0, previewBounds.Width - 1), Math.Max(0, previewBounds.Height - 1));
+        }
+
+        private void PerformSelectionMutation(Action action)
+        {
+            if (action == null)
+                return;
+
+            selectionRefreshSuppressionDepth++;
+            try
+            {
+                grid.SuspendLayout();
+                action();
+            }
+            finally
+            {
+                grid.ResumeLayout();
+                selectionRefreshSuppressionDepth--;
+            }
+        }
+
         private void ApplyFieldCellTheme(DataGridViewCell gridCell, BulkMaterialEditRow row, BulkMaterialEditCellState cell)
         {
             if (gridCell == null || row == null || cell == null)
@@ -871,11 +1273,18 @@ namespace Material_Editor.Controls
             if (selectedPaths.Count == 0)
                 return;
 
-            foreach (DataGridViewRow row in grid.Rows)
+            PerformSelectionMutation(() =>
             {
-                if (row.Tag is BulkMaterialEditRow bulkRow && selectedPaths.Contains(bulkRow.FilePath))
-                    row.Selected = true;
-            }
+                grid.ClearSelection();
+                foreach (DataGridViewRow row in grid.Rows)
+                {
+                    if (row.Tag is BulkMaterialEditRow bulkRow && selectedPaths.Contains(bulkRow.FilePath))
+                    {
+                        foreach (DataGridViewCell cell in row.Cells)
+                            cell.Selected = true;
+                    }
+                }
+            });
         }
 
         private Color GetReadOnlyCellBackColor()

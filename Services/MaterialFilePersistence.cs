@@ -1,4 +1,5 @@
 using MaterialLib;
+using Material_Editor.Models;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -105,8 +106,13 @@ namespace Material_Editor.Services
 
         public static void SaveMaterial(string filePath, BaseMaterialFile material, bool asJson, bool backupExisting)
         {
-            if (backupExisting && File.Exists(filePath))
-                File.Copy(filePath, $"{filePath}.bak", true);
+            SaveMaterial(filePath, material, asJson, backupExisting, config: null);
+        }
+
+        public static void SaveMaterial(string filePath, BaseMaterialFile material, bool asJson, bool backupExisting, Config config)
+        {
+            if (!MaterialBackupService.TryCreateBackup(filePath, backupExisting, config, out _, out string backupError))
+                throw new IOException(backupError ?? "Failed to create backup.");
 
             EnsureParentDirectoryExists(filePath);
             SaveMaterial(filePath, material, asJson);
@@ -118,11 +124,12 @@ namespace Material_Editor.Services
             bool asJson,
             string successMessage,
             bool backupExisting = false,
+            Config config = null,
             string failureMessagePrefix = null)
         {
             try
             {
-                SaveMaterial(filePath, material, asJson, backupExisting);
+                SaveMaterial(filePath, material, asJson, backupExisting, config);
                 return new FieldCopyResult(filePath, FieldCopyStatus.Success, successMessage);
             }
             catch (Exception ex)

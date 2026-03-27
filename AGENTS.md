@@ -106,24 +106,13 @@ For app-level changes, prefer verifying with:
 - `dotnet build "MaterialEditor.Tests\\MaterialEditor.Tests.csproj" --no-restore`
 - `dotnet "MaterialEditor.Tests\\bin\\Debug\\net8.0-windows10.0.22621.0\\MaterialEditor.Tests.dll"`
 
-Helpful environment settings in this repo:
-
-- `DOTNET_CLI_HOME` set to the repo-local `.dotnet-home`
-- `DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1`
-
-Example:
-
-```powershell
-$env:DOTNET_CLI_HOME='c:\Users\Scott\source\repos\materialeditor\Material-Editor\.dotnet-home'
-$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE='1'
-dotnet build "Material Editor.csproj" -p:RestoreIgnoreFailedSources=true -p:NuGetAudit=false
-```
-
 Important:
 
 - run verification commands sequentially, not in parallel
 - parallel verification can hit the expected CS2012 file-lock on `obj\...\bgem.dll`
 - sequential verification is the correct validation approach for this repo
+
+Local execution details, machine-specific environment variables, sandbox limitations, and personal agent workflow notes should live in `AGENTS.local.md` instead of this shared file.
 
 ## Approach for Substantial Changes
 

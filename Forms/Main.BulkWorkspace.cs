@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Windows.Forms;
 using Material_Editor.Dialogs;
@@ -86,10 +87,49 @@ namespace Material_Editor.Forms
             config.BulkDirtyRemoveBehavior = behavior;
         }
 
+        private bool TryResolveDirtyRemoveBehavior(int dirtyFileCount, string actionDescription, out BulkDirtyRemoveBehavior behavior)
+        {
+            behavior = config?.BulkDirtyRemoveBehavior ?? BulkDirtyRemoveBehavior.Ask;
+            if (behavior != BulkDirtyRemoveBehavior.Ask)
+                return true;
+
+            using var dialog = new BulkDirtyFileRemovalDialog(dirtyFileCount, actionDescription);
+            if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Choice == BulkDirtyFileRemovalChoice.Cancel)
+                return false;
+
+            if (dialog.RememberedBehavior.HasValue)
+                SetBulkDirtyRemoveBehavior(dialog.RememberedBehavior.Value);
+
+            behavior = dialog.Choice == BulkDirtyFileRemovalChoice.Save
+                ? BulkDirtyRemoveBehavior.Save
+                : BulkDirtyRemoveBehavior.Discard;
+            return true;
+        }
+
+        private bool HandleDirtySingleFileBeforeContinuing(string actionDescription)
+        {
+            if (!TryResolveDirtyRemoveBehavior(1, actionDescription, out BulkDirtyRemoveBehavior behavior))
+                return false;
+
+            if (behavior != BulkDirtyRemoveBehavior.Save)
+                return true;
+
+            SaveToolStripMenuItem_Click(null, null);
+            return !changed;
+        }
+
         private void UpdateWorkspaceCommandState()
         {
             bool hasSingleFile = currentMaterial != null && !IsBulkMode;
             bool hasBulkSession = IsBulkMode && bulkSession != null;
+            bool canUndoSingle = hasSingleFile && CanUndoSingleEditor;
+            bool canRedoSingle = hasSingleFile && CanRedoSingleEditor;
+            bool canUndoBulk = hasBulkSession && bulkEditorView != null && bulkEditorView.CanUndo;
+            bool canRedoBulk = hasBulkSession && bulkEditorView != null && bulkEditorView.CanRedo;
+            bool canFind = hasBulkSession && bulkEditorView != null && bulkEditorView.CanFindSelection;
+            bool canFindReplace = hasBulkSession && bulkEditorView != null && bulkEditorView.CanFindReplaceSelection;
+            bool canRecover = (hasSingleFile && !string.IsNullOrWhiteSpace(workFilePath))
+                || (hasBulkSession && bulkEditorView != null && bulkEditorView.SelectedRowCount > 0);
 
             saveToolStripMenuItem.Enabled = hasSingleFile || hasBulkSession;
             saveAsToolStripMenuItem.Enabled = hasSingleFile || hasBulkSession;
@@ -100,17 +140,60 @@ namespace Material_Editor.Forms
             removeSelectedFilesToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.SelectedRowCount > 0;
             generateVariationsToolStripMenuItem.Enabled = hasSingleFile;
             overwriteFilesByFieldToolStripMenuItem.Enabled = hasSingleFile;
+            findToolStripMenuItem.Enabled = canFind;
+            findReplaceToolStripMenuItem.Enabled = canFindReplace;
+            if (recoveryToolStripMenuItem != null)
+                recoveryToolStripMenuItem.Enabled = canRecover;
 
             openFolderToolStripMenuItem.Enabled = true;
             saveSelectedToolStripMenuItem.Visible = hasBulkSession;
             addFilesToolStripMenuItem.Visible = hasBulkSession;
             addFolderToolStripMenuItem.Visible = hasBulkSession;
             removeSelectedFilesToolStripMenuItem.Visible = hasBulkSession;
+            editRevealInExplorerToolStripMenuItem.Visible = hasBulkSession;
+            editReloadFromDiskToolStripMenuItem.Visible = hasBulkSession;
+
+            if (editToolStripMenuItem != null)
+            {
+                bool canSendSingleEditor = hasBulkSession
+                    && bulkEditorView.SelectedRows.Count == 1
+                    && bulkEditorView.SelectedRows[0].Material != null
+                    && !bulkEditorView.SelectedRows[0].HasLoadError;
+
+                editToolStripMenuItem.Enabled = canUndoSingle || canRedoSingle || hasBulkSession;
+                editUndoToolStripMenuItem.Enabled = canUndoSingle || canUndoBulk;
+                editRedoToolStripMenuItem.Enabled = canRedoSingle || canRedoBulk;
+                editSendToSingleEditorToolStripMenuItem.Enabled = canSendSingleEditor;
+                editRevealInExplorerToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanCopyRowsSelection;
+                editReloadFromDiskToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanCopyRowsSelection;
+                editEditToggleToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanEditOrToggleSelection;
+                editCutToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanCutFieldsSelection;
+                editCutRowsToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanCutRowsSelection;
+                editCopyRowsToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanCopyRowsSelection;
+                editCopyFieldsToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanCopyFieldsSelection;
+                editPasteRowsToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanPasteRowsSelection;
+                editPasteFieldsToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanPasteFieldsSelection;
+                editClearToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanClearSelection;
+                editSelectAllToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanSelectAll;
+                editSelectRowToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanSelectCurrentRow;
+                editSelectPageAboveToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanSelectCurrentRow;
+                editSelectPageBelowToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanSelectCurrentRow;
+                editSelectAllAboveToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanSelectCurrentRow;
+                editSelectAllBelowToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanSelectCurrentRow;
+                editSelectDirtyRowsToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanSelectDirtyRows;
+                editSelectErrorRowsToolStripMenuItem.Enabled = hasBulkSession && bulkEditorView.CanSelectErrorRows;
+            }
+
+            UpdateBulkProjectionMenuState(hasBulkSession);
         }
 
         private void UpdateWindowTitle()
         {
-            Text = GetTitleText();
+            string title = GetTitleText();
+            if (!IsBulkMode && changed && !title.StartsWith("*", StringComparison.Ordinal))
+                title = "*" + title;
+
+            Text = title;
         }
 
         private bool ConfirmCanReplaceWorkspace()
@@ -130,19 +213,7 @@ namespace Material_Editor.Forms
 
             if (changed)
             {
-                DialogResult res = MessageBox.Show(
-                    "There are unsaved changes to the file.\nDo want to save them before continuing?",
-                    "Unsaved Changes",
-                    MessageBoxButtons.YesNoCancel,
-                    MessageBoxIcon.Question);
-
-                if (res == DialogResult.Yes)
-                {
-                    SaveToolStripMenuItem_Click(null, null);
-                    return !changed;
-                }
-
-                return res != DialogResult.Cancel;
+                return HandleDirtySingleFileBeforeContinuing("close or replace the current file");
             }
 
             return true;
@@ -153,9 +224,9 @@ namespace Material_Editor.Forms
             if (!IsBulkMode || bulkSession == null)
                 return false;
 
-            IReadOnlyList<BulkMaterialEditRow> scopeRows = selectedOnly
-                ? bulkEditorView.SelectedRows
-                : bulkSession.Rows.Where(row => !row.HasLoadError).ToArray();
+            IReadOnlyList<BulkMaterialEditRow> scopeRows = GetBulkSaveScopeRows(selectedOnly)
+                .Where(row => !row.HasLoadError)
+                .ToArray();
 
             if (scopeRows.Count == 0)
             {
@@ -181,9 +252,7 @@ namespace Material_Editor.Forms
             if (!IsBulkMode || bulkSession == null)
                 return;
 
-            IReadOnlyList<BulkMaterialEditRow> exportRows = bulkEditorView.SelectedRows.Count > 0
-                ? bulkEditorView.SelectedRows
-                : bulkSession.Rows.Where(row => !row.HasLoadError).ToArray();
+            IReadOnlyList<BulkMaterialEditRow> exportRows = GetBulkExportRows();
 
             if (exportRows.Count == 0)
             {
@@ -198,6 +267,26 @@ namespace Material_Editor.Forms
             IReadOnlyList<FieldCopyResult> results = BulkMaterialExportService.Export(exportRows, dialog.OutputPattern, serializeToJSONToolStripMenuItem.Checked);
             using var summary = new OverwriteSummaryDialog(results, "Bulk Save As Summary");
             summary.ShowDialog(this);
+        }
+
+        private IReadOnlyList<BulkMaterialEditRow> GetBulkSaveScopeRows(bool selectedOnly)
+        {
+            if (bulkSession == null || bulkEditorView == null)
+                return Array.Empty<BulkMaterialEditRow>();
+
+            return selectedOnly
+                ? bulkEditorView.SelectedRows
+                : bulkEditorView.VisibleRows;
+        }
+
+        private IReadOnlyList<BulkMaterialEditRow> GetBulkExportRows()
+        {
+            if (bulkSession == null || bulkEditorView == null)
+                return Array.Empty<BulkMaterialEditRow>();
+
+            return bulkEditorView.SelectedRows.Count > 0
+                ? bulkEditorView.SelectedRows
+                : bulkEditorView.VisibleRows.Where(row => !row.HasLoadError).ToArray();
         }
 
         private void OpenMaterialSelection(IEnumerable<string> rawPaths, bool appendToBulk)
@@ -276,6 +365,7 @@ namespace Material_Editor.Forms
             ClearSingleWorkspace();
 
             bulkSession = BulkMaterialEditSession.Create(materialType, filePaths);
+            bulkBackupBeforeWrite = config.CreateBackupsByDefault;
             bulkEditorView.Initialize(bulkSession, config, bulkBackupBeforeWrite);
             bulkEditorView.Visible = true;
 
@@ -327,6 +417,151 @@ namespace Material_Editor.Forms
             UpdateWindowTitle();
         }
 
+        private BulkMaterialEditRow GetSingleSelectedBulkRow(string actionDescription)
+        {
+            if (!IsBulkMode || bulkSession == null)
+                return null;
+
+            IReadOnlyList<BulkMaterialEditRow> selectedRows = bulkEditorView.SelectedRows;
+            if (selectedRows.Count != 1)
+            {
+                MessageBox.Show(this, $"Select exactly one file to {actionDescription}.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return null;
+            }
+
+            BulkMaterialEditRow row = selectedRows[0];
+            if (row.HasLoadError || row.Material == null)
+            {
+                MessageBox.Show(this, "The selected row could not be loaded and cannot be sent to another workflow.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return null;
+            }
+
+            return row;
+        }
+
+        private void SendSelectedBulkRowToSingleEditor()
+        {
+            BulkMaterialEditRow row = GetSingleSelectedBulkRow("open it in the single-file editor");
+            if (row == null || !ConfirmCanReplaceWorkspace())
+                return;
+
+            bool markDirty = bulkEditorView?.IsDirtyRow(row) == true;
+            ExitBulkMode();
+            OpenMaterialState(row.FilePath, CloneMaterial(row.Material), row.OriginalMaterial ?? row.Material, markDirty, "Opening material...");
+        }
+
+        private void SendSelectedBulkRowToGenerateVariations()
+        {
+            BulkMaterialEditRow row = GetSingleSelectedBulkRow("generate variations");
+            if (row == null)
+                return;
+
+            WorkflowExecutionResult execution = RunGenerateVariationsWorkflow(CloneMaterial(row.Material), BuildSuggestedVariationOutputPattern(row.FilePath), allowReturnToBulkEditor: true);
+            if (execution?.Results == null)
+                return;
+
+            using var summary = new OverwriteSummaryDialog(execution.Results, "Generation Summary");
+            summary.ShowDialog(this);
+            if (execution.AddResultsToCurrentBulkEditor)
+                AddWorkflowResultFilesToBulk(execution.Results);
+        }
+
+        private void SendSelectedBulkRowToOverwriteFiles()
+        {
+            BulkMaterialEditRow row = GetSingleSelectedBulkRow("overwrite files by field");
+            if (row == null)
+                return;
+
+            WorkflowExecutionResult execution = RunOverwriteFilesByFieldWorkflow(CloneMaterial(row.Material), CloneMaterial(row.OriginalMaterial ?? row.Material), allowReturnToBulkEditor: true);
+            if (execution?.Results == null)
+                return;
+
+            using var summary = new OverwriteSummaryDialog(execution.Results, "Overwrite Summary");
+            summary.ShowDialog(this);
+            if (execution.AddResultsToCurrentBulkEditor)
+                AddWorkflowResultFilesToBulk(execution.Results);
+        }
+
+        private void RevealSelectedBulkFilesInExplorer()
+        {
+            if (!IsBulkMode || bulkSession == null)
+                return;
+
+            IReadOnlyList<BulkMaterialEditRow> selectedRows = bulkEditorView.SelectedRows;
+            if (selectedRows.Count == 0)
+            {
+                MessageBox.Show(this, "Select one or more rows to reveal.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                foreach (string path in selectedRows.Select(row => row.FilePath).Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"/select,\"{path}\"",
+                        UseShellExecute = true
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Failed to reveal one or more files in Explorer.{Environment.NewLine}{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ReloadSelectedBulkFilesFromDisk()
+        {
+            if (!IsBulkMode || bulkSession == null)
+                return;
+
+            IReadOnlyList<BulkMaterialEditRow> selectedRows = bulkEditorView.SelectedRows;
+            if (selectedRows.Count == 0)
+            {
+                MessageBox.Show(this, "Select one or more rows to reload.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            IReadOnlyList<BulkMaterialEditRow> dirtyRows = selectedRows.Where(row => bulkEditorView.IsDirtyRow(row)).ToArray();
+            if (!HandleDirtyBulkRowsBeforeContinuing(
+                dirtyRows,
+                dirtyRows,
+                "Reload Selected Summary",
+                "reload selected files from disk"))
+            {
+                return;
+            }
+
+            string[] selectedPaths = selectedRows.Select(row => row.FilePath).ToArray();
+            bulkSession.ReloadRows(selectedRows);
+            bulkEditorView.NotifySessionChanged();
+            bulkEditorView.SelectFileRows(selectedPaths);
+            UpdateWorkspaceCommandState();
+            UpdateWindowTitle();
+        }
+
+        private void AddWorkflowResultFilesToBulk(IReadOnlyList<FieldCopyResult> results)
+        {
+            if (!IsBulkMode || bulkSession == null || results == null || results.Count == 0)
+                return;
+
+            string[] addedPaths = results
+                .Where(result => result.Status == FieldCopyStatus.Success)
+                .Select(result => result.TargetPath)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (addedPaths.Length == 0)
+                return;
+
+            bulkEditorView.AddFiles(addedPaths);
+            UpdateWorkspaceCommandState();
+            UpdateWindowTitle();
+        }
+
         private bool HandleDirtyBulkRowsBeforeContinuing(
             IReadOnlyList<BulkMaterialEditRow> dirtyRows,
             IReadOnlyList<BulkMaterialEditRow> saveRows,
@@ -336,25 +571,15 @@ namespace Material_Editor.Forms
             if (dirtyRows == null || dirtyRows.Count == 0)
                 return true;
 
-            BulkDirtyRemoveBehavior behavior = config.BulkDirtyRemoveBehavior;
-            if (behavior == BulkDirtyRemoveBehavior.Ask)
-            {
-                using var dialog = new BulkDirtyFileRemovalDialog(dirtyRows.Count, actionDescription);
-                if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Choice == BulkDirtyFileRemovalChoice.Cancel)
-                    return false;
-
-                if (dialog.RememberedBehavior.HasValue)
-                    SetBulkDirtyRemoveBehavior(dialog.RememberedBehavior.Value);
-
-                behavior = dialog.Choice == BulkDirtyFileRemovalChoice.Save
-                    ? BulkDirtyRemoveBehavior.Save
-                    : BulkDirtyRemoveBehavior.Discard;
-            }
+            if (!TryResolveDirtyRemoveBehavior(dirtyRows.Count, actionDescription, out BulkDirtyRemoveBehavior behavior))
+                return false;
 
             if (behavior != BulkDirtyRemoveBehavior.Save)
                 return true;
 
-            IReadOnlyList<FieldCopyResult> results = bulkSession.ApplySelectedChanges(saveRows, bulkEditorView.BackupBeforeWrite);
+            bulkEditorView?.CommitPendingEdits();
+            bulkEditorView?.ClearStaleValidationErrors(saveRows);
+            IReadOnlyList<FieldCopyResult> results = bulkSession.ApplySelectedChanges(saveRows, bulkEditorView.BackupBeforeWrite, config);
             using var summary = new OverwriteSummaryDialog(results, summaryTitle);
             summary.ShowDialog(this);
 
@@ -381,7 +606,7 @@ namespace Material_Editor.Forms
 
             string fileName = WorkFileName;
             if (string.IsNullOrEmpty(fileName))
-                return ApplicationTitle;
+                return changed ? $"*{ApplicationTitle}" : ApplicationTitle;
 
             if (currentMaterial != null)
                 return $"{ApplicationTitle} – {fileName} (Version {currentMaterial.Version})";

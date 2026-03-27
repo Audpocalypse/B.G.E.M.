@@ -61,6 +61,11 @@ namespace MaterialEditor.Tests
             MaterialFilePersistence.SaveMaterial(path, material, asJson: false);
         }
 
+        public static IDisposable PushBackupRoot(string rootDirectory)
+        {
+            return new BackupRootOverrideScope(rootDirectory);
+        }
+
         public static BGSM LoadBgsm(string path)
         {
             if (!MaterialFilePersistence.TryLoadMaterial(path, out BaseMaterialFile material, out _, out string errorMessage) || material is not BGSM bgsm)
@@ -81,6 +86,22 @@ namespace MaterialEditor.Tests
             public void Dispose()
             {
                 DeleteDirectory(Path);
+            }
+        }
+
+        private sealed class BackupRootOverrideScope : IDisposable
+        {
+            private readonly string previousRootDirectory;
+
+            public BackupRootOverrideScope(string rootDirectory)
+            {
+                previousRootDirectory = MaterialBackupService.BackupRootDirectoryOverride;
+                MaterialBackupService.BackupRootDirectoryOverride = rootDirectory;
+            }
+
+            public void Dispose()
+            {
+                MaterialBackupService.BackupRootDirectoryOverride = previousRootDirectory;
             }
         }
     }

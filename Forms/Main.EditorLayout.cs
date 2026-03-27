@@ -166,6 +166,101 @@ namespace Material_Editor.Forms
             }
         }
 
+        private SingleEditorSectionState CaptureSingleEditorSectionState()
+        {
+            var state = new SingleEditorSectionState
+            {
+                GeneralCollapsed = generalPageSection?.IsCollapsed ?? false,
+                MaterialCollapsed = materialPageSection?.IsCollapsed ?? false,
+                EffectCollapsed = effectPageSection?.IsCollapsed ?? false
+            };
+
+            foreach (CollapsibleGroupBox section in sectionVisibilityMap.Keys)
+                state.NestedCollapsedStates[GetNestedSectionStateKey(section)] = section.IsCollapsed;
+
+            return state;
+        }
+
+        private void ApplySingleEditorSectionState(SingleEditorSectionState state)
+        {
+            if (state == null)
+                return;
+
+            generalPageSection?.SetCollapsed(state.GeneralCollapsed);
+            materialPageSection?.SetCollapsed(state.MaterialCollapsed);
+            effectPageSection?.SetCollapsed(state.EffectCollapsed);
+
+            foreach (CollapsibleGroupBox section in sectionVisibilityMap.Keys)
+            {
+                if (state.NestedCollapsedStates.TryGetValue(GetNestedSectionStateKey(section), out bool isCollapsed))
+                    section.SetCollapsed(isCollapsed);
+            }
+
+            UpdateTopLevelSectionVisibility();
+            UpdateSectionVisibility();
+        }
+
+        private void ExpandSingleEditorSectionsForControls(IEnumerable<string> controlNames)
+        {
+            var changedControlNames = new HashSet<string>(controlNames ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+            if (changedControlNames.Count == 0)
+                return;
+
+            bool expandGeneral = false;
+            bool expandMaterial = false;
+            bool expandEffect = false;
+
+            foreach (MaterialFieldDescriptor descriptor in MaterialFieldRegistry.GetDescriptors(CurrentMaterialType))
+            {
+                if (!changedControlNames.Contains(descriptor.Label))
+                    continue;
+
+                switch (descriptor.Category)
+                {
+                    case FieldCategory.General:
+                        expandGeneral = true;
+                        break;
+                    case FieldCategory.Effect:
+                        expandEffect = true;
+                        break;
+                    default:
+                        expandMaterial = true;
+                        break;
+                }
+            }
+
+            foreach ((CollapsibleGroupBox section, string[] controls) in sectionVisibilityMap)
+            {
+                if (controls.Any(changedControlNames.Contains))
+                    section.SetCollapsed(false);
+            }
+
+            if (expandGeneral)
+                generalPageSection?.SetCollapsed(false);
+            if (expandMaterial)
+                materialPageSection?.SetCollapsed(false);
+            if (expandEffect)
+                effectPageSection?.SetCollapsed(false);
+
+            UpdateTopLevelSectionVisibility();
+            UpdateSectionVisibility();
+        }
+
+        private string GetNestedSectionStateKey(CollapsibleGroupBox section)
+        {
+            if (section == null)
+                return string.Empty;
+
+            if (sectionVisibilityMap.TryGetValue(section, out string[] controls)
+                && controls != null
+                && controls.Length > 0)
+            {
+                return string.Join("|", controls);
+            }
+
+            return section.Text ?? string.Empty;
+        }
+
         private void InitializePageSections()
         {
             contentHostLayout.SuspendLayout();
